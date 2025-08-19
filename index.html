@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
     <title>Price Checker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
         .login-form {
             position: fixed;
@@ -19,7 +20,6 @@
             display: none;
         }
     </style>
-  <script type="module" crossorigin src="/price-checker/assets/index-39c3d5ce.js"></script>
 </head>
 <body>
     <div id="login" class="login-form">
@@ -27,7 +27,9 @@
         <button onclick="checkPassword()">確認</button>
     </div>
     <div id="root" class="hidden"></div>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="./src/auth.js"></script>
-    
+    <script src="./src/scraper.js"></script>
 </body>
 </html>
