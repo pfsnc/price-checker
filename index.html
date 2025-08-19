@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
     <title>Price Checker</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 移除 Tailwind CDN，改用基本 CSS -->
     <style>
         .login-form {
             position: fixed;
@@ -19,16 +19,70 @@
         .hidden {
             display: none;
         }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 1rem;
+        }
+        .search-form {
+            margin-bottom: 2rem;
+            display: flex;
+            gap: 1rem;
+        }
+        .form-input {
+            padding: 0.5rem;
+            border: 1px solid #ccc;
+            border-radius: 0.25rem;
+        }
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 0.25rem;
+            background-color: #3b82f6;
+            color: white;
+            cursor: pointer;
+        }
+        .stamp-item {
+            border: 1px solid #ccc;
+            border-radius: 0.25rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        .price-bar {
+            font-family: monospace;
+            text-align: center;
+            background-color: #f3f4f6;
+            padding: 0.5rem;
+            border-radius: 0.25rem;
+            margin: 0.5rem 0;
+        }
+        .price-range {
+            display: flex;
+            justify-content: space-between;
+            color: #6b7280;
+            font-size: 0.875rem;
+        }
+        .series-tag {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            background-color: #e5e7eb;
+            border-radius: 0.25rem;
+            margin-right: 0.5rem;
+        }
+        .current-price {
+            font-size: 1.25rem;
+            color: #2563eb;
+        }
     </style>
 </head>
 <body>
     <div id="login" class="login-form">
-        <input type="password" id="password" placeholder="請輸入密碼">
-        <button onclick="checkPassword()">確認</button>
+        <input type="password" id="password" placeholder="請輸入密碼" class="form-input">
+        <button onclick="checkPassword()" class="btn">確認</button>
     </div>
     <div id="root" class="hidden"></div>
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- 使用開發版本的 React 以獲取更詳細的錯誤訊息 -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="./src/auth.js"></script>
     <script src="./src/scraper.js"></script>
     <script src="./src/app.js"></script>
