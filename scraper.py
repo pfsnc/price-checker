@@ -214,46 +214,6 @@ class StampScraper:
         print(f"本頁面共解析到 {len(stamps)} 個郵票數據")
         return stamps
 
-    def get_page_content(self, url, page=1):
-        try:
-            # 處理分頁URL
-            if page > 1:
-                # 從基礎URL中提取正確的路徑格式
-                base_path = url.rstrip('/')
-                if 'list_90_' not in base_path:
-                    # 如果是第一次訪問，需要修改URL格式
-                    if base_path.endswith('/JTxilie'):
-                        url = f"{base_path}/list_90_{page}.html"
-                    elif base_path.endswith('/ljt'):
-                        url = f"{base_path}/list_90_{page}.html"
-                    elif base_path.endswith('/wbypiao'):
-                        url = f"{base_path}/list_84_{page}.html"
-                else:
-                    # 如果已經是列表頁面，直接替換頁碼
-                    url = re.sub(r'list_90_\d+\.html', f'list_90_{page}.html', base_path)
-            else:
-                # 第一頁的處理
-                base_path = url.rstrip('/')
-                url = f"{base_path}/list_90_1.html"
-    
-            print(f"正在請求URL: {url}")  # 偵錯輸出
-            
-            response = requests.get(url, headers=self.headers, timeout=10)
-            response.encoding = 'utf-8'
-            
-            # 檢查響應狀態
-            if response.status_code != 200:
-                print(f"警告：獲得了非200響應代碼：{response.status_code}")
-                return None
-                
-            content = response.text
-            print(f"成功獲取網頁內容，長度：{len(content)} 字符")
-            return content
-        
-    except requests.exceptions.RequestException as e:
-        print(f"請求失敗 {url}: {e}")
-        return None
-
     def save_data(self, stamps):
         """保存數據並進行驗證"""
         if not stamps:
