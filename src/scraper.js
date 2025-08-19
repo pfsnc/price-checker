@@ -30,12 +30,22 @@ window.StampPriceTracker = function StampPriceTracker() {
     React.useEffect(() => {
         fetchData();
     }, []);
-
+    
     const fetchData = async () => {
         try {
             const response = await fetch('./data/stamps_history.json');
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
             const data = await response.json();
+            console.log('Fetched data:', data); // 添加日誌
+    
+            if (!Array.isArray(data) || data.length === 0) {
+                throw new Error('Invalid data format');
+            }
+    
             const latestData = data[data.length - 1].data;
+            console.log('Latest data:', latestData); // 添加日誌
             
             const history = {};
             data.forEach(snapshot => {
@@ -58,6 +68,7 @@ window.StampPriceTracker = function StampPriceTracker() {
             setFilteredStamps(latestData);
         } catch (error) {
             console.error('Error fetching data:', error);
+            setLoading(false);
         } finally {
             setLoading(false);
         }
