@@ -5,8 +5,9 @@ export default defineConfig({
   plugins: [react()],
   base: '/price-checker/',
   build: {
+    outDir: 'dist',
     rollupOptions: {
-      external: ['/config.js']
+      external: ['/price-checker/config.js']
     }
   },
   publicDir: 'public'
