@@ -26,7 +26,7 @@ function StampPriceTracker() {
 
     const fetchData = async () => {
         try {
-            const response = await fetch(`${import.meta.env.BASE_URL}data/stamps_history.json`);
+            const response = await fetch('./data/stamps_history.json');
             const data = await response.json();
             const latestData = data[data.length - 1].data;
             
