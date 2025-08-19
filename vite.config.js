@@ -6,10 +6,8 @@ export default defineConfig({
   base: '/price-checker/',
   build: {
     rollupOptions: {
-      output: {
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom'],
-        },
+      input: {
+        main: 'index.html',
       },
     },
   },
