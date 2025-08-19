@@ -5,9 +5,18 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+# 添加這個權限塊
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
       
@@ -36,4 +45,5 @@ jobs:
           path: './dist'
           
       - name: Deploy to GitHub Pages
+        id: deployment
         uses: actions/deploy-pages@v3
