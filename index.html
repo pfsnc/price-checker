@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Price Checker</title>
+    <style>
+        .login-form {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+  <script type="module" crossorigin src="/price-checker/assets/index-39c3d5ce.js"></script>
+</head>
+<body>
+    <div id="login" class="login-form">
+        <input type="password" id="password" placeholder="請輸入密碼">
+        <button onclick="checkPassword()">確認</button>
+    </div>
+    <div id="root" class="hidden"></div>
+    <script src="./src/auth.js"></script>
+    
+</body>
+</html>
