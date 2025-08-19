@@ -6,18 +6,13 @@
     <meta name="robots" content="noindex, nofollow">
     <title>Price Checker</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script type="module">
-        // 直接在這裡引入配置
-        const response = await fetch('/price-checker/config.js');
-        const configText = await response.text();
-        const scriptElement = document.createElement('script');
-        scriptElement.textContent = configText;
-        document.head.appendChild(scriptElement);
-    </script>
+    <!-- 直接引入配置文件 -->
+    <script src="/price-checker/config.js"></script>
 </head>
 <body>
     <div id="root"></div>
     <script>
+        // 在 window 加載時檢查密碼
         window.onload = function() {
             if (!sessionStorage.getItem('authenticated')) {
                 const password = prompt('請輸入密碼');
