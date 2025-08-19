@@ -4,17 +4,114 @@ import json
 import re
 from datetime import datetime
 import time
+import random
 
 class StampScraper:
     def __init__(self):
+        # 修正基礎 URL 和對應的列表頁參數
         self.base_urls = {
-            'JT': 'http://www.518yp.com/JTxilie/',    # J和T系列
-            'LJT': 'http://www.518yp.com/ljt/',       # 紀和特系列
-            'WB': 'http://www.518yp.com/wgbh/'        # 文和編系列
+            'JT': {
+                'url': 'http://www.518yp.com/JTxilie',
+                'list_param': '90'     # list_90_X.html
+            },
+            'WB': {
+                'url': 'http://www.518yp.com/wbypiao',
+                'list_param': '84'     # list_84_X.html
+            },
+            'LJT': {
+                'url': 'http://www.518yp.com/ljt',
+                'list_param': '82'     # list_82_X.html
+            }
         }
+        
         self.headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Connection': 'keep-alive',
+            'Referer': 'http://www.518yp.com/'
         }
+
+    def get_page_content(self, base_url_info, page=1):
+        """
+        獲取指定頁面的內容
+        base_url_info: 包含 url 和 list_param 的字典
+        """
+        try:
+            # 構建完整的URL
+            url = f"{base_url_info['url']}/list_{base_url_info['list_param']}_{page}.html"
+            
+            print(f"正在請求URL: {url}")
+            response = requests.get(url, headers=self.headers, timeout=10)
+            response.encoding = 'utf-8'
+            
+            if response.status_code != 200:
+                print(f"警告：獲得了非200響應代碼：{response.status_code}")
+                return None
+                
+            content = response.text
+            print(f"成功獲取網頁內容，長度：{len(content)} 字符")
+            return content
+            
+        except requests.exceptions.RequestException as e:
+            print(f"請求失敗 {url}: {e}")
+            return None
+
+    def scrape_all_pages(self, base_url_info):
+        """
+        抓取所有頁面的數據
+        base_url_info: 包含 url 和 list_param 的字典
+        """
+        all_stamps = []
+        page = 1
+        max_pages = 20  # 設置最大頁數限制
+        retry_count = 3  # 每頁最大重試次數
+        
+        while page <= max_pages:
+            print(f"正在抓取第 {page} 頁，來自 {base_url_info['url']}")
+            
+            # 添加重試機制
+            for attempt in range(retry_count):
+                html = self.get_page_content(base_url_info, page)
+                if html:
+                    break
+                print(f"第 {attempt + 1} 次重試抓取第 {page} 頁")
+                time.sleep(5 * (attempt + 1))
+            
+            if not html:
+                print(f"無法獲取第 {page} 頁的內容，即使在 {retry_count} 次重試後")
+                break
+                
+            stamps = self.parse_stamp_data(html)
+            if not stamps:
+                print(f"在第 {page} 頁沒有找到郵票數據")
+                # 檢查是否真的到達最後一頁
+                if "没有找到相关的信息" in html:
+                    print("已到達最後一頁")
+                    break
+            
+            all_stamps.extend(stamps)
+            print(f"當前已收集 {len(all_stamps)} 個郵票數據")
+            
+            page += 1
+            
+            # 添加隨機延遲，避免被反爬
+            delay = 2 + random.random() * 3  # 2-5秒的隨機延遲
+            print(f"等待 {delay:.1f} 秒後繼續...")
+            time.sleep(delay)
+                
+        return all_stamps
+
+    def scrape_all_series(self):
+        all_stamps = []
+        
+        for series_key, url_info in self.base_urls.items():
+            print(f"正在抓取 {series_key} 系列，來自 {url_info['url']}")
+            stamps = self.scrape_all_pages(url_info)
+            all_stamps.extend(stamps)
+            time.sleep(5)  # 在不同系列之間添加更長的延遲
+            
+        return all_stamps
 
     def determine_series_type(self, series_code):
         """準確判斷郵票系列類型"""
@@ -119,52 +216,43 @@ class StampScraper:
 
     def get_page_content(self, url, page=1):
         try:
+            # 處理分頁URL
             if page > 1:
-                # 處理分頁URL
-                if url.endswith('/'):
-                    url = f"{url}index_{page}.html"
+                # 從基礎URL中提取正確的路徑格式
+                base_path = url.rstrip('/')
+                if 'list_90_' not in base_path:
+                    # 如果是第一次訪問，需要修改URL格式
+                    if base_path.endswith('/JTxilie'):
+                        url = f"{base_path}/list_90_{page}.html"
+                    elif base_path.endswith('/ljt'):
+                        url = f"{base_path}/list_90_{page}.html"
+                    elif base_path.endswith('/wbypiao'):
+                        url = f"{base_path}/list_84_{page}.html"
                 else:
-                    url = f"{url}/index_{page}.html"
-                    
+                    # 如果已經是列表頁面，直接替換頁碼
+                    url = re.sub(r'list_90_\d+\.html', f'list_90_{page}.html', base_path)
+            else:
+                # 第一頁的處理
+                base_path = url.rstrip('/')
+                url = f"{base_path}/list_90_1.html"
+    
+            print(f"正在請求URL: {url}")  # 偵錯輸出
+            
             response = requests.get(url, headers=self.headers, timeout=10)
             response.encoding = 'utf-8'
-            return response.text
-        except Exception as e:
-            print(f"Error fetching page {url}: {e}")
-            return None
-
-    def scrape_all_pages(self, url):
-        all_stamps = []
-        page = 1
-        max_pages = 20  # 設置最大頁數限制
-        
-        while page <= max_pages:
-            print(f"Scraping page {page} of {url}")
-            html = self.get_page_content(url, page)
             
-            if not html:
-                break
+            # 檢查響應狀態
+            if response.status_code != 200:
+                print(f"警告：獲得了非200響應代碼：{response.status_code}")
+                return None
                 
-            stamps = self.parse_stamp_data(html)
-            if not stamps:
-                break
-                
-            all_stamps.extend(stamps)
-            page += 1
-            time.sleep(2)  # 增加延遲，避免被封
-            
-        return all_stamps
-
-    def scrape_all_series(self):
-        all_stamps = []
+            content = response.text
+            print(f"成功獲取網頁內容，長度：{len(content)} 字符")
+            return content
         
-        for url_key, url in self.base_urls.items():
-            print(f"Scraping {url_key} series from {url}")
-            stamps = self.scrape_all_pages(url)
-            all_stamps.extend(stamps)
-            time.sleep(5)  # 在不同系列之間添加更長的延遲
-            
-        return all_stamps
+    except requests.exceptions.RequestException as e:
+        print(f"請求失敗 {url}: {e}")
+        return None
 
     def save_data(self, stamps):
         """保存數據並進行驗證"""
