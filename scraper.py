@@ -110,30 +110,6 @@ class StampScraper:
             
         return all_stamps
 
-    def determine_series_type(self, series_code):
-        """準確判斷郵票系列類型"""
-        if not series_code:
-            return 'unknown'
-            
-        # 移除所有空白字符
-        series_code = series_code.strip()
-        
-        # 優先檢查較長的匹配
-        if series_code.startswith('文'):
-            return '文'
-        elif series_code.startswith('编'):
-            return '編'
-        elif series_code.startswith('纪'):
-            return '紀'
-        elif series_code.startswith('特'):
-            return '特'
-        elif series_code.startswith('J'):
-            return 'J'
-        elif series_code.startswith('T'):
-            return 'T'
-        else:
-            return 'unknown'
-
     def extract_series_code(self, title):
         """從標題中提取志號"""
         series_match = re.search(r'志号[：:]\s*([\w\d]+)', title)
@@ -159,7 +135,8 @@ class StampScraper:
         if not html:
             return []
         
-        soup = BeautifulSoup(html, 'html.parser')
+        # 使用 GBK 解碼網頁內容
+        soup = BeautifulSoup(html, 'html.parser', from_encoding='gbk')
         stamps = []
         
         for item in soup.find_all('div', class_='goodsItem'):
@@ -170,36 +147,47 @@ class StampScraper:
                 if img_elem and img_elem.get('src'):
                     img_url = 'http://www.518yp.com' + img_elem['src']
                 
-                # 找到標題
+                # 找到標題並轉換編碼
                 title_elem = item.find('strong')
                 if not title_elem:
                     continue
                     
                 title = title_elem.text.strip()
                 
-                # 找到編號 - 使用更精確的定位
+                # 從標題或志號欄位找出編號
+                series_code = None
+                
+                # 1. 先從 p 標籤中找編號
                 code_elem = None
                 for p in item.find_all('p'):
-                    if p.string and '志號' in p.string:
-                        code_elem = p
+                    if p.string and '志号：' in p.string:  # 使用簡體字
+                        code_text = p.text.replace('志号：', '').strip()
+                        if code_text:
+                            series_code = code_text
                         break
-                        
-                series_code = None
-                if code_elem:
-                    series_code = code_elem.text.replace('志號：', '').strip()
                 
-                # 找到價格 - 改進價格解析邏輯
+                # 2. 如果找不到,從標題提取
+                if not series_code:
+                    # 處理簡體字前綴
+                    prefixes = ['J', 'T', '特', '文', '编', '纪']  # 使用簡體字
+                    for prefix in prefixes:
+                        pattern = rf'{prefix}\d+'
+                        match = re.search(pattern, title)
+                        if match:
+                            series_code = match.group()
+                            break
+                
+                # 找到價格
                 price_elem = item.find('font', class_='shop_s')
                 price = None
                 if price_elem:
                     # 移除￥符號並清理空白
                     price_text = price_elem.text.replace('￥', '').strip()
                     try:
-                        # 處理可能包含小數點的價格
                         price = float(price_text)
-                        print(f"成功解析價格: {price_text} -> {price}")
-                    except ValueError as e:
-                        print(f"無法解析價格文本 '{price_text}': {e}")
+                        print(f"成功解析价格: {price_text} -> {price}")  # 使用簡體字
+                    except ValueError:
+                        print(f"无法解析价格文本 '{price_text}'")  # 使用簡體字
                         continue
                 
                 if title and series_code and price is not None:
@@ -212,16 +200,42 @@ class StampScraper:
                         'image_url': img_url
                     }
                     stamps.append(stamp)
-                    print(f"成功解析郵票: {stamp}")
+                    print(f"成功解析邮票: {stamp}")  # 使用簡體字
                 else:
-                    print(f"缺少必要數據: 標題={bool(title)}, 編號={bool(series_code)}, 價格={price}")
+                    missing = []
+                    if not title:
+                        missing.append("标题")  # 使用簡體字
+                    if not series_code:
+                        missing.append("编号")  # 使用簡體字
+                    if price is None:
+                        missing.append("价格")  # 使用簡體字
+                    print(f"缺少数据: {', '.join(missing)}")  # 使用簡體字
+                    print(f"当前解析数据: 标题={title}, 编号={series_code}, 价格={price}")  # 使用簡體字
                     
             except Exception as e:
-                print(f"解析郵票項目時發生錯誤: {e}")
+                print(f"解析邮票项目时发生错误: {e}")  # 使用簡體字
                 continue
-        
-        print(f"本頁面共解析到 {len(stamps)} 個郵票數據")
+                
+        print(f"本页面共解析到 {len(stamps)} 个邮票数据")  # 使用簡體字
         return stamps
+    
+    def determine_series_type(self, series_code):
+        """根據編號判斷系列類型"""
+        if not series_code:
+            return None
+            
+        # 使用簡體字的映射
+        prefix_map = {
+            'J': '纪字号',
+            'T': '特字号', 
+            '特': '特种邮票',
+            '文': '文字号',
+            '编': '编年号',
+            '纪': '纪念邮票'
+        }
+        
+        first_char = series_code[0]
+        return prefix_map.get(first_char, '其他')
     
     def save_data(self, stamps):
         """保存數據為 JSON 格式"""
