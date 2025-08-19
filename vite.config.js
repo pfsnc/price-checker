@@ -6,8 +6,8 @@ export default defineConfig({
   base: '/price-checker/',
   build: {
     rollupOptions: {
-      external: ['/config.js'], // 將 config.js 標記為外部資源
+      external: ['/config.js']
     }
   },
-  publicDir: 'public',
+  publicDir: 'public'
 })
