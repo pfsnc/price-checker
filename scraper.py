@@ -68,21 +68,36 @@ class StampScraper:
         soup = BeautifulSoup(html, 'html.parser')
         stamps = []
         
-        # 查找所有可能的郵票項目
-        for item in soup.find_all(['div', 'li'], class_=['item', 'list-item']):
+        # 尋找所有的表格，這些表格包含郵票信息
+        for table in soup.find_all('table', attrs={'width': '100%'}):
             try:
-                title_elem = item.find('a')
-                if not title_elem:
+                # 找到標題鏈接
+                title_link = table.find('a', title=True)
+                if not title_link:
                     continue
                     
-                full_title = title_elem.text.strip()
+                full_title = title_link['title'].strip()
                 
-                # 提取各個部分
-                series_code = self.extract_series_code(full_title)
-                price = self.extract_price(full_title)
-                clean_title = self.extract_title(full_title)
+                # 找到志號（在包含 "志号：" 的段落中）
+                series_p = table.find('p', text=lambda t: t and '志号：' in t)
+                series_code = None
+                if series_p:
+                    series_code = series_p.text.replace('志号：', '').strip()
                 
-                if series_code and price:
+                # 找到價格（在 class="shop_s" 的元素中）
+                price_elem = table.find(class_='shop_s')
+                price = None
+                if price_elem:
+                    price_match = re.search(r'￥\s*(\d+)', price_elem.text)
+                    if price_match:
+                        price = int(price_match.group(1))
+                
+                # 提取實際標題（從 strong 標籤中）
+                clean_title = table.find('strong')
+                if clean_title:
+                    clean_title = clean_title.text.strip()
+                
+                if series_code and price and clean_title:
                     series_type = self.determine_series_type(series_code)
                     
                     stamp = {
@@ -93,11 +108,13 @@ class StampScraper:
                         'date': datetime.now().strftime('%Y-%m-%d')
                     }
                     stamps.append(stamp)
+                    print(f"成功解析郵票: {stamp}")  # 偵錯輸出
                     
             except Exception as e:
-                print(f"Error parsing stamp item: {e}")
+                print(f"解析郵票項目時發生錯誤: {e}")
                 continue
-                
+        
+        print(f"本頁面共解析到 {len(stamps)} 個郵票數據")
         return stamps
 
     def get_page_content(self, url, page=1):
