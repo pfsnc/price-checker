@@ -17,6 +17,7 @@
                 const password = prompt('請輸入密碼');
                 if (password === window.PASSWORD) {
                     sessionStorage.setItem('authenticated', 'true');
+                    window.location.reload(); // 重新加載以顯示表單
                 } else {
                     alert('密碼錯誤');
                     window.location.reload();
