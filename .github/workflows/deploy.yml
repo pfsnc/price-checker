@@ -24,9 +24,9 @@ jobs:
       - name: Install Dependencies
         run: npm install
         
-      - name: Generate Password Config
+      - name: Inject Password
         run: |
-          echo "export const HASHED_PASSWORD = '${{ secrets.ACCESS_PASSWORD }}';" > src/config.js
+          echo "window.ACCESS_PASSWORD = '${{ secrets.ACCESS_PASSWORD }}';" > public/config.js
         
       - name: Build
         run: npm run build
