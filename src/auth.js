@@ -1,7 +1,3 @@
-// 將在構建時由 GitHub Actions 替換的雜湊值
-const HASHED_PASSWORD = 'HASHED_PASSWORD_PLACEHOLDER';
-
-// 雜湊函數
 async function hashPassword(password) {
     const encoder = new TextEncoder();
     const data = encoder.encode(password);
@@ -14,5 +10,6 @@ async function hashPassword(password) {
 // 驗證函數
 export async function verifyPassword(input) {
     const hashedInput = await hashPassword(input);
-    return hashedInput === HASHED_PASSWORD;
+    const correctHash = '6021861960b10db44466fb1b8888c7906ded6e22956bbe6d40bbeb29dd6484d6'; // 示例雜湊值
+    return hashedInput === correctHash;
 }
