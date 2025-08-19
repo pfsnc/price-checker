@@ -14,6 +14,8 @@ jobs:
     
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0  # 獲取完整歷史記錄以便比對
     
     - name: Set up Python
       uses: actions/setup-python@v2
@@ -26,15 +28,25 @@ jobs:
         pip install requests beautifulsoup4
     
     - name: Run scraper
-      run: python scraper.py
+      id: scraper
+      run: |
+        mkdir -p data
+        python scraper.py
+        if [ -n "$(git status --porcelain)" ]; then
+          echo "::set-output name=changes::true"
+        else
+          echo "::set-output name=changes::false"
+        fi
 
     - name: Configure Git
+      if: steps.scraper.outputs.changes == 'true'
       run: |
         git config --global user.name 'github-actions[bot]'
         git config --global user.email 'github-actions[bot]@users.noreply.github.com'
     
     - name: Commit and push if changed
+      if: steps.scraper.outputs.changes == 'true'
       run: |
         git add -A
-        git commit -m "Update stamp prices" || exit 0
+        git commit -m "更新郵票價格數據 $(date +'%Y-%m-%d')"
         git push
