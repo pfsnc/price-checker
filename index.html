@@ -6,18 +6,18 @@
     <meta name="robots" content="noindex, nofollow">
     <title>Price Checker</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script type="module" src="config.js"></script>
+    <!-- 修改 config.js 的引用路徑 -->
+    <script src="/price-checker/config.js"></script>
 </head>
 <body>
     <div id="root"></div>
     <script>
-        // 檢查是否已經通過驗證
         window.onload = function() {
             if (!sessionStorage.getItem('authenticated')) {
                 const password = prompt('請輸入密碼');
                 if (password === window.PASSWORD) {
                     sessionStorage.setItem('authenticated', 'true');
-                    window.location.reload(); // 重新加載以顯示表單
+                    window.location.reload();
                 } else {
                     alert('密碼錯誤');
                     window.location.reload();
