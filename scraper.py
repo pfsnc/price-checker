@@ -33,17 +33,14 @@ class StampScraper:
         }
 
     def get_page_content(self, base_url_info, page=1):
-        """
-        獲取指定頁面的內容
-        base_url_info: 包含 url 和 list_param 的字典
-        """
         try:
-            # 構建完整的URL
             url = f"{base_url_info['url']}/list_{base_url_info['list_param']}_{page}.html"
             
             print(f"正在請求URL: {url}")
             response = requests.get(url, headers=self.headers, timeout=10)
-            response.encoding = 'utf-8'
+            
+            # 使用正確的編碼方式
+            response.encoding = 'gbk'  # 修改為 GBK 編碼
             
             if response.status_code != 200:
                 print(f"警告：獲得了非200響應代碼：{response.status_code}")
@@ -165,6 +162,7 @@ class StampScraper:
         soup = BeautifulSoup(html, 'html.parser')
         stamps = []
         
+        # 修改選擇器以正確定位郵票數據
         for item in soup.find_all('div', class_='goodsItem'):
             try:
                 # 找到圖片URL
@@ -172,43 +170,39 @@ class StampScraper:
                 img_url = None
                 if img_elem and img_elem.get('src'):
                     img_url = 'http://www.518yp.com' + img_elem['src']
-                
-                # 找到標題鏈接和標題文字
-                title_link = item.find('a', title=True)
-                if not title_link:
+    
+                # 找到標題和編號
+                title_elem = item.find('strong')
+                if not title_elem:
                     continue
                     
-                full_title = title_link['title'].strip()
+                title = title_elem.text.strip()
                 
-                # 找到志號
-                series_p = item.find('p', text=lambda t: t and '志号：' in t if t else False)
+                # 找到編號
+                code_elem = item.find('p', text=lambda t: t and '志號' in t)
                 series_code = None
-                if series_p:
-                    series_code = series_p.text.replace('志号：', '').strip()
+                if code_elem:
+                    series_code = code_elem.text.replace('志號：', '').strip()
                 
                 # 找到價格
-                price_elem = item.find(class_='shop_s')
+                price_elem = item.find('font', class_='shop_s')
                 price = None
                 if price_elem:
-                    price_match = re.search(r'￥\s*(\d+)', price_elem.text)
-                    if price_match:
-                        price = int(price_match.group(1))
+                    price_text = price_elem.text.replace('￥', '').strip()
+                    try:
+                        price = int(price_text)
+                    except ValueError:
+                        print(f"無法解析價格: {price_text}")
+                        continue
                 
-                # 提取實際標題
-                clean_title = item.find('strong')
-                if clean_title:
-                    clean_title = clean_title.text.strip()
-                
-                if series_code and price and clean_title:
-                    series_type = self.determine_series_type(series_code)
-                    
+                if title and series_code and price:
                     stamp = {
-                        'series': series_code,         # 例如: "J23"
-                        'series_type': series_type,    # 例如: "J"
-                        'title': clean_title,          # 標題
-                        'price': price,                # 純數字價格
+                        'series': series_code,
+                        'series_type': self.determine_series_type(series_code),
+                        'title': title,
+                        'price': price,
                         'date': datetime.now().strftime('%Y-%m-%d'),
-                        'image_url': img_url           # 完整的圖片URL
+                        'image_url': img_url
                     }
                     stamps.append(stamp)
                     print(f"成功解析郵票: {stamp}")
