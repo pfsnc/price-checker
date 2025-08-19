@@ -9,7 +9,6 @@ async function hashPassword(password) {
         .join('');
 }
 
-// 驗證函數
 async function checkPassword() {
     const passwordInput = document.getElementById('password').value;
     const hashedInput = await hashPassword(passwordInput);
@@ -31,6 +30,5 @@ function checkAuth() {
     return sessionStorage.getItem(AUTH_KEY) === 'true';
 }
 
-// 將函數掛載到 window 對象
 window.checkPassword = checkPassword;
 window.checkAuth = checkAuth;
