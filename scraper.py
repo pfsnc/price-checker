@@ -162,7 +162,6 @@ class StampScraper:
         soup = BeautifulSoup(html, 'html.parser')
         stamps = []
         
-        # 修改選擇器以正確定位郵票數據
         for item in soup.find_all('div', class_='goodsItem'):
             try:
                 # 找到圖片URL
@@ -170,8 +169,8 @@ class StampScraper:
                 img_url = None
                 if img_elem and img_elem.get('src'):
                     img_url = 'http://www.518yp.com' + img_elem['src']
-    
-                # 找到標題和編號
+                
+                # 找到標題
                 title_elem = item.find('strong')
                 if not title_elem:
                     continue
@@ -179,7 +178,7 @@ class StampScraper:
                 title = title_elem.text.strip()
                 
                 # 找到編號
-                code_elem = item.find('p', text=lambda t: t and '志號' in t)
+                code_elem = item.find('p', string=lambda t: t and '志號' in t if t else False)
                 series_code = None
                 if code_elem:
                     series_code = code_elem.text.replace('志號：', '').strip()
@@ -190,7 +189,8 @@ class StampScraper:
                 if price_elem:
                     price_text = price_elem.text.replace('￥', '').strip()
                     try:
-                        price = int(price_text)
+                        # 直接使用浮點數儲存價格（元）
+                        price = float(price_text)
                     except ValueError:
                         print(f"無法解析價格: {price_text}")
                         continue
@@ -200,7 +200,7 @@ class StampScraper:
                         'series': series_code,
                         'series_type': self.determine_series_type(series_code),
                         'title': title,
-                        'price': price,
+                        'price': price,  # 直接儲存元為單位的價格
                         'date': datetime.now().strftime('%Y-%m-%d'),
                         'image_url': img_url
                     }
