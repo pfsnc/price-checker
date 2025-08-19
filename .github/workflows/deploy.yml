@@ -1,14 +1,9 @@
-name: Deploy to GitHub Pages
+name: Build and Deploy
 
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
-
-permissions:
-  contents: read
-  pages: write
-  id-token: write
 
 jobs:
   build:
@@ -24,14 +19,14 @@ jobs:
       - name: Install Dependencies
         run: npm install
         
-      - name: Create config
-        run: |
-          mkdir -p public
-          echo "window.PASSWORD = '${{ secrets.ACCESS_PASSWORD }}';" > public/config.js
+      - name: Generate Password Hash
+        run: node scripts/generate-hash.js
+        env:
+          ACCESS_PASSWORD: ${{ secrets.ACCESS_PASSWORD }}
         
       - name: Build
         run: npm run build
-        
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
         
