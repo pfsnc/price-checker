@@ -26,7 +26,8 @@ jobs:
         
       - name: Create config
         run: |
-          echo "const PASSWORD = '${{ secrets.ACCESS_PASSWORD }}';" > src/config.js
+          echo "window.PASSWORD = '${{ secrets.ACCESS_PASSWORD }}';" > public/config.js
+          mkdir -p public
         
       - name: Build
         run: npm run build
