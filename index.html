@@ -6,8 +6,14 @@
     <meta name="robots" content="noindex, nofollow">
     <title>Price Checker</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 修改 config.js 的引用路徑 -->
-    <script src="/price-checker/config.js"></script>
+    <script type="module">
+        // 直接在這裡引入配置
+        const response = await fetch('/price-checker/config.js');
+        const configText = await response.text();
+        const scriptElement = document.createElement('script');
+        scriptElement.textContent = configText;
+        document.head.appendChild(scriptElement);
+    </script>
 </head>
 <body>
     <div id="root"></div>
