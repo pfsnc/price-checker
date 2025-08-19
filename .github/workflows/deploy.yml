@@ -26,11 +26,15 @@ jobs:
         
       - name: Create config
         run: |
-          echo "window.PASSWORD = '${{ secrets.ACCESS_PASSWORD }}';" > public/config.js
           mkdir -p public
+          echo "window.PASSWORD = '${{ secrets.ACCESS_PASSWORD }}';" > public/config.js
         
       - name: Build
         run: npm run build
+        
+      - name: Copy config to dist
+        run: |
+          cp public/config.js dist/
         
       - name: Setup Pages
         uses: actions/configure-pages@v4
