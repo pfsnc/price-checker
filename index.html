@@ -6,17 +6,17 @@
     <meta name="robots" content="noindex, nofollow">
     <title>Price Checker</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 直接引入配置文件 -->
-    <script src="/price-checker/config.js"></script>
 </head>
 <body>
     <div id="root"></div>
-    <script>
-        // 在 window 加載時檢查密碼
-        window.onload = function() {
+    <script type="module">
+        import { verifyPassword } from './src/auth.js';
+
+        window.onload = async function() {
             if (!sessionStorage.getItem('authenticated')) {
                 const password = prompt('請輸入密碼');
-                if (password === window.PASSWORD) {
+                
+                if (await verifyPassword(password)) {
                     sessionStorage.setItem('authenticated', 'true');
                     window.location.reload();
                 } else {
