@@ -177,35 +177,44 @@ class StampScraper:
                     
                 title = title_elem.text.strip()
                 
-                # 找到編號
-                code_elem = item.find('p', string=lambda t: t and '志號' in t if t else False)
+                # 找到編號 - 使用更精確的定位
+                code_elem = None
+                for p in item.find_all('p'):
+                    if p.string and '志號' in p.string:
+                        code_elem = p
+                        break
+                        
                 series_code = None
                 if code_elem:
                     series_code = code_elem.text.replace('志號：', '').strip()
                 
-                # 找到價格
+                # 找到價格 - 改進價格解析邏輯
                 price_elem = item.find('font', class_='shop_s')
                 price = None
                 if price_elem:
+                    # 移除￥符號並清理空白
                     price_text = price_elem.text.replace('￥', '').strip()
                     try:
-                        # 直接使用浮點數儲存價格（元）
+                        # 處理可能包含小數點的價格
                         price = float(price_text)
-                    except ValueError:
-                        print(f"無法解析價格: {price_text}")
+                        print(f"成功解析價格: {price_text} -> {price}")
+                    except ValueError as e:
+                        print(f"無法解析價格文本 '{price_text}': {e}")
                         continue
                 
-                if title and series_code and price:
+                if title and series_code and price is not None:
                     stamp = {
                         'series': series_code,
                         'series_type': self.determine_series_type(series_code),
                         'title': title,
-                        'price': price,  # 直接儲存元為單位的價格
+                        'price': price,
                         'date': datetime.now().strftime('%Y-%m-%d'),
                         'image_url': img_url
                     }
                     stamps.append(stamp)
                     print(f"成功解析郵票: {stamp}")
+                else:
+                    print(f"缺少必要數據: 標題={bool(title)}, 編號={bool(series_code)}, 價格={price}")
                     
             except Exception as e:
                 print(f"解析郵票項目時發生錯誤: {e}")
