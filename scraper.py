@@ -165,32 +165,37 @@ class StampScraper:
         soup = BeautifulSoup(html, 'html.parser')
         stamps = []
         
-        # 尋找所有的表格，這些表格包含郵票信息
-        for table in soup.find_all('table', attrs={'width': '100%'}):
+        for item in soup.find_all('div', class_='goodsItem'):
             try:
-                # 找到標題鏈接
-                title_link = table.find('a', title=True)
+                # 找到圖片URL
+                img_elem = item.find('img')
+                img_url = None
+                if img_elem and img_elem.get('src'):
+                    img_url = 'http://www.518yp.com' + img_elem['src']
+                
+                # 找到標題鏈接和標題文字
+                title_link = item.find('a', title=True)
                 if not title_link:
                     continue
                     
                 full_title = title_link['title'].strip()
                 
-                # 找到志號（在包含 "志号：" 的段落中）
-                series_p = table.find('p', text=lambda t: t and '志号：' in t)
+                # 找到志號
+                series_p = item.find('p', text=lambda t: t and '志号：' in t if t else False)
                 series_code = None
                 if series_p:
                     series_code = series_p.text.replace('志号：', '').strip()
                 
-                # 找到價格（在 class="shop_s" 的元素中）
-                price_elem = table.find(class_='shop_s')
+                # 找到價格
+                price_elem = item.find(class_='shop_s')
                 price = None
                 if price_elem:
                     price_match = re.search(r'￥\s*(\d+)', price_elem.text)
                     if price_match:
                         price = int(price_match.group(1))
                 
-                # 提取實際標題（從 strong 標籤中）
-                clean_title = table.find('strong')
+                # 提取實際標題
+                clean_title = item.find('strong')
                 if clean_title:
                     clean_title = clean_title.text.strip()
                 
@@ -198,14 +203,15 @@ class StampScraper:
                     series_type = self.determine_series_type(series_code)
                     
                     stamp = {
-                        'series': series_code,
-                        'series_type': series_type,
-                        'title': clean_title,
-                        'price': price,
-                        'date': datetime.now().strftime('%Y-%m-%d')
+                        'series': series_code,         # 例如: "J23"
+                        'series_type': series_type,    # 例如: "J"
+                        'title': clean_title,          # 標題
+                        'price': price,                # 純數字價格
+                        'date': datetime.now().strftime('%Y-%m-%d'),
+                        'image_url': img_url           # 完整的圖片URL
                     }
                     stamps.append(stamp)
-                    print(f"成功解析郵票: {stamp}")  # 偵錯輸出
+                    print(f"成功解析郵票: {stamp}")
                     
             except Exception as e:
                 print(f"解析郵票項目時發生錯誤: {e}")
@@ -213,42 +219,43 @@ class StampScraper:
         
         print(f"本頁面共解析到 {len(stamps)} 個郵票數據")
         return stamps
-
+    
     def save_data(self, stamps):
-        """保存數據並進行驗證"""
+        """保存數據為 JSON 格式"""
         if not stamps:
             print("Warning: No stamps data to save")
             return
-            
+                
         # 數據驗證
         valid_stamps = []
         for stamp in stamps:
-            if all(key in stamp for key in ['series', 'series_type', 'title', 'price', 'date']):
+            if all(key in stamp for key in ['series', 'series_type', 'title', 'price', 'date', 'image_url']):
                 valid_stamps.append(stamp)
             else:
                 print(f"Invalid stamp data: {stamp}")
         
-        # 讀取現有數據
-        try:
-            with open('data/stamps_history.json', 'r', encoding='utf-8') as f:
-                history = json.load(f)
-        except FileNotFoundError:
-            history = []
-        except json.JSONDecodeError:
-            print("Error reading existing data file, starting fresh")
-            history = []
+        # 按系列和編號排序
+        valid_stamps.sort(key=lambda x: (x['series_type'], int(re.findall(r'\d+', x['series'])[0])))
         
-        # 添加新數據
-        history.append({
-            'date': datetime.now().strftime('%Y-%m-%d'),
-            'data': valid_stamps
-        })
-        
-        # 保存數據
         try:
+            # 讀取現有數據
+            try:
+                with open('data/stamps_history.json', 'r', encoding='utf-8') as f:
+                    history = json.load(f)
+            except (FileNotFoundError, json.JSONDecodeError):
+                history = []
+            
+            # 添加新數據
+            history.append({
+                'date': datetime.now().strftime('%Y-%m-%d'),
+                'data': valid_stamps
+            })
+            
+            # 保存數據
             with open('data/stamps_history.json', 'w', encoding='utf-8') as f:
                 json.dump(history, f, ensure_ascii=False, indent=2)
             print(f"Successfully saved {len(valid_stamps)} stamps")
+                
         except Exception as e:
             print(f"Error saving data: {e}")
 
