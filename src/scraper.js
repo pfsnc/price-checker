@@ -88,15 +88,20 @@ window.StampPriceTracker = function StampPriceTracker() {
     return e('div', { className: "container" }, [
         e('div', { key: 'search-form', className: "search-form" }, [
             e('select', {
+                key: 'series-select',
                 className: "form-input",
                 value: series,
                 onChange: (event) => setSeries(event.target.value)
             }, 
-                seriesTypes.map(type => 
-                    e('option', { key: type.value, value: type.value }, type.label)
+                seriesTypes.map((type, index) => 
+                    e('option', { 
+                        key: `series-type-${index}`,
+                        value: type.value 
+                    }, type.label)
                 )
             ),
             e('input', {
+                key: 'number-input',
                 type: "text",
                 placeholder: "輸入編號",
                 className: "form-input",
@@ -104,44 +109,58 @@ window.StampPriceTracker = function StampPriceTracker() {
                 onChange: (event) => setNumber(event.target.value)
             }),
             e('button', {
+                key: 'search-button',
                 className: "btn",
                 onClick: handleSearch
             }, "搜尋")
         ]),
 
-        e('div', null,
-            filteredStamps.map(stamp => {
+        e('div', { key: 'stamps-list' },
+            filteredStamps.map((stamp, index) => {
                 const stampHistory = priceHistory[stamp.series] || { min: stamp.price, max: stamp.price };
                 const priceRange = stampHistory.max - stampHistory.min;
                 const percentage = priceRange === 0 ? 50 : ((stamp.price - stampHistory.min) / priceRange) * 100;
                 
                 return e('div', { 
-                    key: stamp.series,
+                    key: `stamp-${stamp.series}-${index}`,
                     className: "stamp-item"
                 }, [
-                    e('div', { key: 'header' }, [
+                    e('div', { 
+                        key: `header-${stamp.series}-${index}` 
+                    }, [
                         e('span', { 
+                            key: `tag-${stamp.series}-${index}`,
                             className: "series-tag"
                         }, stamp.series_type),
-                        e('span', null, `${stamp.series} - ${stamp.title}`),
+                        e('span', {
+                            key: `title-${stamp.series}-${index}`
+                        }, `${stamp.series} - ${stamp.title}`),
                         e('span', { 
+                            key: `price-${stamp.series}-${index}`,
                             className: "current-price"
                         }, `¥${stamp.price.toLocaleString()}`)
                     ]),
                     e('pre', { 
+                        key: `bar-${stamp.series}-${index}`,
                         className: "price-bar"
                     }, createProgressBar(percentage)),
                     e('div', { 
+                        key: `range-${stamp.series}-${index}`,
                         className: "price-range"
                     }, [
-                        e('span', { key: 'min' }, `¥${stampHistory.min.toLocaleString()}`),
-                        e('span', { key: 'max' }, `¥${stampHistory.max.toLocaleString()}`)
+                        e('span', { 
+                            key: `min-${stamp.series}-${index}`
+                        }, `¥${stampHistory.min.toLocaleString()}`),
+                        e('span', { 
+                            key: `max-${stamp.series}-${index}`
+                        }, `¥${stampHistory.max.toLocaleString()}`)
                     ])
                 ]);
             })
         ),
 
         e('div', { 
+            key: 'counter',
             className: "mt-4 text-right text-sm text-gray-500"
         }, `共顯示 ${filteredStamps.length} 個項目`)
     ]);
