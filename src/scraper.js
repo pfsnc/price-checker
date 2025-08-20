@@ -78,9 +78,9 @@ window.StampPriceTracker = function StampPriceTracker() {
                     case '编':
                         return stamp.series_type === '編號系列';
                     case '纪':
-                        return stamp.series_type === '紀念系列';
+                        return stamp.series_type === '纪念邮票';
                     case '特':
-                        return stamp.series_type === '特種系列';
+                        return stamp.series_type === '特种邮票';
                     default:
                         return false;
                 }
