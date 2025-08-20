@@ -237,7 +237,7 @@ class StampScraper:
         first_char = series_code[0]
         return prefix_map.get(first_char, '其他')
     
-        def save_data(self, stamps):
+    def save_data(self, stamps):
         """以郵票為主體保存數據，記錄每個郵票的價格歷史"""
         if not stamps:
             print("警告：沒有郵票數據可保存")
