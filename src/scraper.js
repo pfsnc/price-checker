@@ -1,21 +1,20 @@
 window.StampPriceTracker = function StampPriceTracker() {
     const e = React.createElement;
 
-    const [stamps, setStamps] = React.useState([]);
+    const [stamps, setStamps] = React.useState({});
     const [filteredStamps, setFilteredStamps] = React.useState([]);
     const [series, setSeries] = React.useState('all');
     const [number, setNumber] = React.useState('');
     const [loading, setLoading] = React.useState(true);
-    const [priceHistory, setPriceHistory] = React.useState({});
 
     const seriesTypes = [
         { value: 'all', label: '全部系列' },
         { value: 'J', label: 'J系列' },
         { value: 'T', label: 'T系列' },
         { value: '文', label: '文革系列' },
-        { value: '编', label: '编号系列' },
-        { value: '纪', label: '纪念系列' },
-        { value: '特', label: '特种系列' }
+        { value: '编', label: '編號系列' },
+        { value: '纪', label: '紀念系列' },
+        { value: '特', label: '特種系列' }
     ];
 
     const createProgressBar = (percentage, width = 20) => {
@@ -33,55 +32,39 @@ window.StampPriceTracker = function StampPriceTracker() {
     
     const fetchData = async () => {
         try {
-            const response = await fetch('./data/stamps_history.json');
+            const response = await fetch('./data/stamps_data.json');
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             const data = await response.json();
             
-            if (!Array.isArray(data) || data.length === 0) {
+            if (typeof data !== 'object') {
                 throw new Error('無效的資料格式');
             }
-    
-            const latestData = data[data.length - 1].data.map(stamp => ({
-                ...stamp,
-                series: stamp.series,
-                series_type: stamp.series_type,
-                title: stamp.title,
-                price: stamp.price,
-                date: stamp.date,
-                image_url: stamp.image_url
+            
+            setStamps(data);
+            const stampsList = Object.entries(data).map(([series, stampData]) => ({
+                series,
+                ...stampData,
+                current_price: stampData.latest_price
             }));
+            setFilteredStamps(stampsList);
             
-            const history = {};
-            data.forEach(snapshot => {
-                snapshot.data.forEach(stamp => {
-                    if (!history[stamp.series]) {
-                        history[stamp.series] = {
-                            prices: [],
-                            min: Infinity,
-                            max: -Infinity
-                        };
-                    }
-                    history[stamp.series].prices.push(stamp.price);
-                    history[stamp.series].min = Math.min(history[stamp.series].min, stamp.price);
-                    history[stamp.series].max = Math.max(history[stamp.series].max, stamp.price);
-                });
-            });
-            
-            setPriceHistory(history);
-            setStamps(latestData);
-            setFilteredStamps(latestData);
         } catch (error) {
             console.error('獲取資料時發生錯誤:', error);
-            setLoading(false);
         } finally {
             setLoading(false);
         }
     };
 
     const handleSearch = () => {
-        let filtered = [...stamps];
+        const stampsList = Object.entries(stamps).map(([series, stampData]) => ({
+            series,
+            ...stampData,
+            current_price: stampData.latest_price
+        }));
+        
+        let filtered = [...stampsList];
         
         if (series !== 'all') {
             filtered = filtered.filter(stamp => {
@@ -93,11 +76,11 @@ window.StampPriceTracker = function StampPriceTracker() {
                     case '文':
                         return stamp.series.startsWith('文');
                     case '编':
-                        return stamp.series_type === '编号系列';
+                        return stamp.series_type === '編號系列';
                     case '纪':
-                        return stamp.series_type === '纪念系列';
+                        return stamp.series_type === '紀念系列';
                     case '特':
-                        return stamp.series_type === '特种系列';
+                        return stamp.series_type === '特種系列';
                     default:
                         return false;
                 }
@@ -107,36 +90,24 @@ window.StampPriceTracker = function StampPriceTracker() {
         if (number) {
             filtered = filtered.filter(stamp => {
                 const searchTerm = number.toLowerCase();
-                const series = stamp.series.toLowerCase();
+                const seriesCode = stamp.series.toLowerCase();
                 
                 if (searchTerm.match(/^[jt]\d+$/i)) {
                     const letter = searchTerm[0].toUpperCase();
                     const num = searchTerm.slice(1);
-                    return series === (letter + num).toLowerCase();
+                    return seriesCode === (letter + num).toLowerCase();
                 }
                 
-                return series.includes(searchTerm);
+                return seriesCode.includes(searchTerm);
             });
         }
         
         setFilteredStamps(filtered);
-        
-        console.log({
-            selectedSeries: series,
-            searchNumber: number,
-            totalStamps: stamps.length,
-            filteredCount: filtered.length,
-            sampleFiltered: filtered.slice(0, 3).map(s => ({
-                series: s.series,
-                type: s.series_type,
-                title: s.title
-            }))
-        });
     };
 
     React.useEffect(() => {
         handleSearch();
-    }, [series]);
+    }, [series, stamps]);
 
     if (loading) {
         return e('div', { className: "container" }, "載入中...");
@@ -174,9 +145,9 @@ window.StampPriceTracker = function StampPriceTracker() {
 
         e('div', { key: 'stamps-list', className: "stamps-list" },
             filteredStamps.map((stamp, index) => {
-                const stampHistory = priceHistory[stamp.series] || { min: stamp.price, max: stamp.price };
-                const priceRange = stampHistory.max - stampHistory.min;
-                const percentage = priceRange === 0 ? 50 : ((stamp.price - stampHistory.min) / priceRange) * 100;
+                const priceRange = stamp.max_price - stamp.min_price;
+                const percentage = priceRange === 0 ? 50 : 
+                    ((stamp.latest_price - stamp.min_price) / priceRange) * 100;
                 
                 return e('div', { 
                     key: `stamp-${stamp.series}-${index}`,
@@ -211,7 +182,7 @@ window.StampPriceTracker = function StampPriceTracker() {
                         e('span', { 
                             key: `price-${stamp.series}-${index}`,
                             className: "current-price"
-                        }, `¥${stamp.price.toLocaleString()}`)
+                        }, `¥${stamp.latest_price.toLocaleString()}`)
                     ]),
                     e('pre', { 
                         key: `bar-${stamp.series}-${index}`,
@@ -223,10 +194,10 @@ window.StampPriceTracker = function StampPriceTracker() {
                     }, [
                         e('span', { 
                             key: `min-${stamp.series}-${index}`
-                        }, `¥${stampHistory.min.toLocaleString()}`),
+                        }, `¥${stamp.min_price.toLocaleString()}`),
                         e('span', { 
                             key: `max-${stamp.series}-${index}`
-                        }, `¥${stampHistory.max.toLocaleString()}`)
+                        }, `¥${stamp.max_price.toLocaleString()}`)
                     ])
                 ]);
             })
