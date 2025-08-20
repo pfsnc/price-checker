@@ -238,56 +238,71 @@ class StampScraper:
         return prefix_map.get(first_char, '其他')
     
         def save_data(self, stamps):
-            """保存數據為 JSON 格式，只在價格有變動時才更新"""
-            if not stamps:
-                print("警告：沒有郵票數據可保存")
-                return
+        """以郵票為主體保存數據，記錄每個郵票的價格歷史"""
+        if not stamps:
+            print("警告：沒有郵票數據可保存")
+            return
     
+        try:
+            # 讀取現有數據
             try:
-                # 讀取現有數據
-                try:
-                    with open('data/stamps_history.json', 'r', encoding='utf-8') as f:
-                        history = json.load(f)
-                except (FileNotFoundError, json.JSONDecodeError):
-                    history = []
+                with open('data/stamps_data.json', 'r', encoding='utf-8') as f:
+                    existing_data = json.load(f)
+            except (FileNotFoundError, json.JSONDecodeError):
+                existing_data = {}
     
-                # 獲取最近一次的價格數據
-                latest_data = history[-1]['data'] if history else []
-                
-                # 建立最近一次價格的查詢字典 {系列號: 價格}
-                latest_prices = {stamp['series']: stamp['price'] for stamp in latest_data}
-                
-                # 過濾出有價格變動的郵票
-                changed_stamps = []
-                for new_stamp in stamps:
-                    series = new_stamp['series']
-                    new_price = new_stamp['price']
-                    
-                    # 如果是新系列或價格有變動，則加入更新列表
-                    if series not in latest_prices or latest_prices[series] != new_price:
-                        changed_stamps.append(new_stamp)
-                        print(f"發現價格變動 - 系列: {series}, 舊價格: {latest_prices.get(series, '新系列')}, 新價格: {new_price}")
+            current_date = datetime.now().strftime('%Y-%m-%d')
+            updates_count = 0
     
-                # 只有在有價格變動時才更新數據
-                if changed_stamps:
-                    # 添加新數據
-                    history.append({
-                        'date': datetime.now().strftime('%Y-%m-%d'),
-                        'data': stamps  # 保存完整數據，但只有在有變動時才添加
-                    })
+            # 處理每個新抓取的郵票數據
+            for new_stamp in stamps:
+                series_code = new_stamp['series']
+                new_price = new_stamp['price']
+    
+                # 如果是新郵票，創建基本結構
+                if series_code not in existing_data:
+                    existing_data[series_code] = {
+                        'title': new_stamp['title'],
+                        'series_type': new_stamp['series_type'],
+                        'image_url': new_stamp.get('image_url'),
+                        'price_history': [],
+                        'min_price': new_price,
+                        'max_price': new_price,
+                        'latest_price': new_price
+                    }
+    
+                stamp_data = existing_data[series_code]
+                
+                # 檢查最新價格是否有變化
+                if not stamp_data['price_history'] or stamp_data['latest_price'] != new_price:
+                    # 更新價格歷史
+                    price_record = {
+                        'date': current_date,
+                        'price': new_price
+                    }
+                    stamp_data['price_history'].append(price_record)
+                    stamp_data['latest_price'] = new_price
                     
-                    # 保存數據
-                    with open('data/stamps_history.json', 'w', encoding='utf-8') as f:
-                        json.dump(history, f, ensure_ascii=False, indent=2)
-                    print(f"成功保存 {len(changed_stamps)} 個價格變動的郵票數據")
-                    return True  # 表示有更新
-                else:
-                    print("沒有發現價格變動，不進行更新")
-                    return False  # 表示沒有更新
+                    # 更新最高最低價
+                    stamp_data['min_price'] = min(stamp_data['min_price'], new_price)
+                    stamp_data['max_price'] = max(stamp_data['max_price'], new_price)
                     
-            except Exception as e:
-                print(f"保存數據時發生錯誤: {e}")
+                    updates_count += 1
+                    print(f"更新郵票價格 - 系列: {series_code}, 新價格: {new_price}")
+    
+            # 只有在有更新時才寫入文件
+            if updates_count > 0:
+                with open('data/stamps_data.json', 'w', encoding='utf-8') as f:
+                    json.dump(existing_data, f, ensure_ascii=False, indent=2)
+                print(f"成功更新 {updates_count} 個郵票的價格資料")
+                return True
+            else:
+                print("沒有發現價格變動，不進行更新")
                 return False
+    
+        except Exception as e:
+            print(f"保存數據時發生錯誤: {e}")
+            return False
 
 def main():
     scraper = StampScraper()
