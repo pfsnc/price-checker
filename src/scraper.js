@@ -42,29 +42,47 @@ window.StampPriceTracker = function StampPriceTracker() {
                 throw new Error('無效的資料格式');
             }
             
-            setStamps(data);
-            const stampsList = Object.entries(data).map(([series, stampData]) => ({
-                series,
-                ...stampData,
-                current_price: stampData.latest_price
-            }));
-            setFilteredStamps(stampsList);
+            // 將物件轉換為陣列並排序
+            const stampsList = Object.entries(data)
+                .map(([series, stampData]) => ({
+                    series,
+                    ...stampData
+                }))
+                .sort((a, b) => {
+                    // 分離字母和數字
+                    const [aLetter, aNum] = a.series.match(/([A-Z文特编纪]*)(\d*)/).slice(1);
+                    const [bLetter, bNum] = b.series.match(/([A-Z文特编纪]*)(\d*)/).slice(1);
+                    
+                    // 定義系列順序
+                    const orderMap = {
+                        'J': 1,
+                        'T': 2,
+                        '特': 3,
+                        '文': 4,
+                        '编': 5,
+                        '纪': 6
+                    };
+                    
+                    // 比較系列
+                    const letterOrder = (orderMap[aLetter] || 99) - (orderMap[bLetter] || 99);
+                    if (letterOrder !== 0) return letterOrder;
+                    
+                    // 比較數字
+                    return parseInt(aNum || 0) - parseInt(bNum || 0);
+                });
             
+            setStamps(stampsList);
+            setFilteredStamps(stampsList);
+                
         } catch (error) {
             console.error('獲取資料時發生錯誤:', error);
         } finally {
             setLoading(false);
         }
     };
-
+    
     const handleSearch = () => {
-        const stampsList = Object.entries(stamps).map(([series, stampData]) => ({
-            series,
-            ...stampData,
-            current_price: stampData.latest_price
-        }));
-        
-        let filtered = [...stampsList];
+        let filtered = [...stamps];
         
         if (series !== 'all') {
             filtered = filtered.filter(stamp => {
@@ -76,7 +94,7 @@ window.StampPriceTracker = function StampPriceTracker() {
                     case '文':
                         return stamp.series.startsWith('文');
                     case '编':
-                        return stamp.series_type === '編號系列';
+                        return stamp.series_type === '编号系列';
                     case '纪':
                         return stamp.series_type === '纪念邮票';
                     case '特':
@@ -90,18 +108,19 @@ window.StampPriceTracker = function StampPriceTracker() {
         if (number) {
             filtered = filtered.filter(stamp => {
                 const searchTerm = number.toLowerCase();
-                const seriesCode = stamp.series.toLowerCase();
+                const series = stamp.series.toLowerCase();
                 
                 if (searchTerm.match(/^[jt]\d+$/i)) {
                     const letter = searchTerm[0].toUpperCase();
                     const num = searchTerm.slice(1);
-                    return seriesCode === (letter + num).toLowerCase();
+                    return series === (letter + num).toLowerCase();
                 }
                 
-                return seriesCode.includes(searchTerm);
+                return series.includes(searchTerm);
             });
         }
         
+        // 保持原有順序，因為 stamps 已經排序過了
         setFilteredStamps(filtered);
     };
 
