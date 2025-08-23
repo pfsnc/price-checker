@@ -8,22 +8,25 @@ import random
 
 class StampScraper:
     def __init__(self):
-        # 修正基礎 URL 和對應的列表頁參數
         self.base_urls = {
             'JT': {
                 'url': 'http://www.518yp.com/JTxilie',
-                'list_param': '90'     # list_90_X.html
+                'list_param': '90'
             },
             'WB': {
                 'url': 'http://www.518yp.com/wbypiao',
-                'list_param': '84'     # list_84_X.html
+                'list_param': '84'
             },
             'LJT': {
                 'url': 'http://www.518yp.com/ljt',
-                'list_param': '82'     # list_82_X.html
+                'list_param': '82'
+            },
+            'M': {  # 新增小型張分類
+                'url': 'http://www.518yp.com/xiaoxingzhang',
+                'list_param': '117'
             }
         }
-        
+            
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
@@ -135,7 +138,6 @@ class StampScraper:
         if not html:
             return []
         
-        # 使用 GBK 解碼網頁內容
         soup = BeautifulSoup(html, 'html.parser', from_encoding='gbk')
         stamps = []
         
@@ -158,9 +160,8 @@ class StampScraper:
                 series_code = None
                 
                 # 1. 先從 p 標籤中找編號
-                code_elem = None
                 for p in item.find_all('p'):
-                    if p.string and '志号：' in p.string:  # 使用簡體字
+                    if p.string and '志号：' in p.string:
                         code_text = p.text.replace('志号：', '').strip()
                         if code_text:
                             series_code = code_text
@@ -168,10 +169,12 @@ class StampScraper:
                 
                 # 2. 如果找不到,從標題提取
                 if not series_code:
-                    # 處理簡體字前綴
-                    prefixes = ['J', 'T', '特', '文', '编', '纪']  # 使用簡體字
-                    for prefix in prefixes:
-                        pattern = rf'{prefix}\d+'
+                    patterns = [
+                        r'[JT]\d+M?',  # 匹配 J123/T123 或 J123M/T123M
+                        r'[特文编纪]\d+M?'  # 匹配其他系列
+                    ]
+                    
+                    for pattern in patterns:
                         match = re.search(pattern, title)
                         if match:
                             series_code = match.group()
@@ -200,7 +203,7 @@ class StampScraper:
                         'image_url': img_url
                     }
                     stamps.append(stamp)
-                    print(f"成功解析邮票: {stamp}")  # 使用簡體字
+                    print(f"成功解析郵票: {stamp}")
                 else:
                     missing = []
                     if not title:
@@ -224,7 +227,6 @@ class StampScraper:
         if not series_code:
             return None
             
-        # 使用簡體字的映射
         prefix_map = {
             'J': '纪字号',
             'T': '特字号', 
