@@ -1,7 +1,7 @@
 window.StampPriceTracker = function StampPriceTracker() {
     const e = React.createElement;
 
-    const [stamps, setStamps] = React.useState({});
+    const [stamps, setStamps] = React.useState([]);
     const [filteredStamps, setFilteredStamps] = React.useState([]);
     const [series, setSeries] = React.useState('all');
     const [number, setNumber] = React.useState('');
