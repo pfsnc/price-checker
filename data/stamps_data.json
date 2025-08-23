@@ -2233,6 +2233,14 @@
       {
         "date": "2025-08-23",
         "price": 20.0
+      },
+      {
+        "date": "2025-08-23",
+        "price": 5.0
+      },
+      {
+        "date": "2025-08-23",
+        "price": 20.0
       }
     ],
     "min_price": 5.0,
@@ -2392,6 +2400,14 @@
       },
       {
         "date": "2025-08-22",
+        "price": 300.0
+      },
+      {
+        "date": "2025-08-23",
+        "price": 9.0
+      },
+      {
+        "date": "2025-08-23",
         "price": 300.0
       },
       {
@@ -4781,11 +4797,15 @@
       {
         "date": "2025-08-20",
         "price": 3300.0
+      },
+      {
+        "date": "2025-08-23",
+        "price": 3000.0
       }
     ],
-    "min_price": 3300.0,
+    "min_price": 3000.0,
     "max_price": 3300.0,
-    "latest_price": 3300.0
+    "latest_price": 3000.0
   },
   "J41M": {
     "title": "里乔内第31届国际邮票博览会",
@@ -4795,11 +4815,15 @@
       {
         "date": "2025-08-20",
         "price": 4800.0
+      },
+      {
+        "date": "2025-08-23",
+        "price": 4500.0
       }
     ],
-    "min_price": 4800.0,
+    "min_price": 4500.0,
     "max_price": 4800.0,
-    "latest_price": 4800.0
+    "latest_price": 4500.0
   },
   "J40": {
     "title": "全国青少年科技作品展览",
@@ -5010,6 +5034,14 @@
       },
       {
         "date": "2025-08-22",
+        "price": 550.0
+      },
+      {
+        "date": "2025-08-23",
+        "price": 1000000.0
+      },
+      {
+        "date": "2025-08-23",
         "price": 550.0
       },
       {
@@ -6363,6 +6395,14 @@
       {
         "date": "2025-08-23",
         "price": 3000.0
+      },
+      {
+        "date": "2025-08-23",
+        "price": 500.0
+      },
+      {
+        "date": "2025-08-23",
+        "price": 3000.0
       }
     ],
     "min_price": 500.0,
@@ -6447,6 +6487,14 @@
       {
         "date": "2025-08-23",
         "price": 2300.0
+      },
+      {
+        "date": "2025-08-23",
+        "price": 800.0
+      },
+      {
+        "date": "2025-08-23",
+        "price": 2300.0
       }
     ],
     "min_price": 800.0,
@@ -6480,6 +6528,14 @@
       },
       {
         "date": "2025-08-22",
+        "price": 2000.0
+      },
+      {
+        "date": "2025-08-23",
+        "price": 450.0
+      },
+      {
+        "date": "2025-08-23",
         "price": 2000.0
       },
       {
@@ -8454,5 +8510,2527 @@
     "min_price": 1200.0,
     "max_price": 1200.0,
     "latest_price": 1200.0
+  },
+  "J59M": {
+    "title": "J59M 中美小版张",
+    "series_type": "纪字号",
+    "image_url": "http://www.518yp.com/uploads/allimg/250507/1-25050G541260-L-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 6000.0
+      }
+    ],
+    "min_price": 6000.0,
+    "max_price": 6000.0,
+    "latest_price": 6000.0
+  },
+  "T29M": {
+    "title": "工艺美术小型张",
+    "series_type": "特字号",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/2013112810473-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 1900.0
+      }
+    ],
+    "min_price": 1900.0,
+    "max_price": 1900.0,
+    "latest_price": 1900.0
+  },
+  "T31M": {
+    "title": "T31M 公路拱桥小型张",
+    "series_type": "特字号",
+    "image_url": "http://www.518yp.com/uploads/allimg/250401/1-2504012316100-L-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 1800.0
+      }
+    ],
+    "min_price": 1800.0,
+    "max_price": 1800.0,
+    "latest_price": 1800.0
+  },
+  "T28M": {
+    "title": "奔马小型张",
+    "series_type": "特字号",
+    "image_url": "http://www.518yp.com/uploads/170213/1-1F213091025941-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 2800.0
+      }
+    ],
+    "min_price": 2800.0,
+    "max_price": 2800.0,
+    "latest_price": 2800.0
+  },
+  "T.38M": {
+    "title": "T.38M长城小型张",
+    "series_type": "特字号",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/2013112811501-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 950.0
+      }
+    ],
+    "min_price": 950.0,
+    "max_price": 950.0,
+    "latest_price": 950.0
+  },
+  "T41M": {
+    "title": "从小爱科学小型张",
+    "series_type": "特字号",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/2013112595333-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 8000.0
+      }
+    ],
+    "min_price": 8000.0,
+    "max_price": 8000.0,
+    "latest_price": 8000.0
+  },
+  "T37M": {
+    "title": "山茶花小型张",
+    "series_type": "特字号",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/2013112385047-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 1250.0
+      }
+    ],
+    "min_price": 1250.0,
+    "max_price": 1250.0,
+    "latest_price": 1250.0
+  },
+  "T44M": {
+    "title": "齐白石作品小型张",
+    "series_type": "特字号",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/201311239173-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 1650.0
+      }
+    ],
+    "min_price": 1650.0,
+    "max_price": 1650.0,
+    "latest_price": 1650.0
+  },
+  "T54M": {
+    "title": "荷花小型张",
+    "series_type": "特字号",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/2013112385223-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 1700.0
+      }
+    ],
+    "min_price": 1700.0,
+    "max_price": 1700.0,
+    "latest_price": 1700.0
+  },
+  "T69M": {
+    "title": "红楼梦小型张",
+    "series_type": "特字号",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/2013112385338-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 1000.0
+      }
+    ],
+    "min_price": 1000.0,
+    "max_price": 1000.0,
+    "latest_price": 1000.0
+  },
+  "T72M": {
+    "title": "药用植物二组小型张",
+    "series_type": "特字号",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/2013112391913-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 90.0
+      }
+    ],
+    "min_price": 90.0,
+    "max_price": 90.0,
+    "latest_price": 90.0
+  },
+  "T82M": {
+    "title": "西厢记小型张",
+    "series_type": "特字号",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/2013112385448-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 680.0
+      }
+    ],
+    "min_price": 680.0,
+    "max_price": 680.0,
+    "latest_price": 680.0
+  },
+  "T89M": {
+    "title": "仕女图小型张",
+    "series_type": "特字号",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/201311239220-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 850.0
+      }
+    ],
+    "min_price": 850.0,
+    "max_price": 850.0,
+    "latest_price": 850.0
+  },
+  "T103M": {
+    "title": "梅花小型张",
+    "series_type": "特字号",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/201311238560-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 130.0
+      }
+    ],
+    "min_price": 130.0,
+    "max_price": 130.0,
+    "latest_price": 130.0
+  },
+  "T106M": {
+    "title": "熊猫小型张",
+    "series_type": "特字号",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/2013112594432-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 15.0
+      },
+      {
+        "date": "2025-08-23",
+        "price": 25.0
+      }
+    ],
+    "min_price": 15.0,
+    "max_price": 25.0,
+    "latest_price": 25.0
+  },
+  "T110M": {
+    "title": "白鹤（小型张）",
+    "series_type": "特字号",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/20131128114029-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 34.0
+      }
+    ],
+    "min_price": 34.0,
+    "max_price": 34.0,
+    "latest_price": 34.0
+  },
+  "T121M": {
+    "title": "中国历代名楼（小全张）",
+    "series_type": "特字号",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/20131128115748-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 55.0
+      }
+    ],
+    "min_price": 55.0,
+    "max_price": 55.0,
+    "latest_price": 55.0
+  },
+  "T122M": {
+    "title": "编钟小型张",
+    "series_type": "特字号",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/201311238578-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 27.0
+      }
+    ],
+    "min_price": 27.0,
+    "max_price": 27.0,
+    "latest_price": 27.0
+  },
+  "J150M": {
+    "title": "大龙小型张",
+    "series_type": "纪字号",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/20131122172917-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 30.0
+      }
+    ],
+    "min_price": 30.0,
+    "max_price": 30.0,
+    "latest_price": 30.0
+  },
+  "T131M": {
+    "title": "三国（一组）小型张",
+    "series_type": "特字号",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/2013112811267-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 80.0
+      }
+    ],
+    "min_price": 80.0,
+    "max_price": 80.0,
+    "latest_price": 80.0
+  },
+  "T123M": {
+    "title": "中国古典文学名著——《水浒传》（第一组）（小型张）",
+    "series_type": "特字号",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/20131128115529-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 90.0
+      }
+    ],
+    "min_price": 90.0,
+    "max_price": 90.0,
+    "latest_price": 90.0
+  },
+  "T129M": {
+    "title": "兰花小型张",
+    "series_type": "特字号",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/2013112385822-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 45.0
+      }
+    ],
+    "min_price": 45.0,
+    "max_price": 45.0,
+    "latest_price": 45.0
+  },
+  "J162M": {
+    "title": "孔子小型张",
+    "series_type": "纪字号",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/20131122174752-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 18.0
+      }
+    ],
+    "min_price": 18.0,
+    "max_price": 18.0,
+    "latest_price": 18.0
+  },
+  "T151M": {
+    "title": "铜车马小型张",
+    "series_type": "特字号",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/2013112385922-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 18.0
+      }
+    ],
+    "min_price": 18.0,
+    "max_price": 18.0,
+    "latest_price": 18.0
+  },
+  "T167M": {
+    "title": "中国古典文学名著——《水浒传》（第三组）（小型张）",
+    "series_type": "特字号",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/20131126135251-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 18.0
+      }
+    ],
+    "min_price": 18.0,
+    "max_price": 18.0,
+    "latest_price": 18.0
+  },
+  "T162M": {
+    "title": "杜鹃花小型张",
+    "series_type": "特字号",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/201311239014-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 18.0
+      }
+    ],
+    "min_price": 18.0,
+    "max_price": 18.0,
+    "latest_price": 18.0
+  },
+  "2024-27": {
+    "title": "2024年《中国2024亚洲国际集邮展览》小型张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/250104/1-2501041124380-L-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 10.8
+      }
+    ],
+    "min_price": 10.8,
+    "max_price": 10.8,
+    "latest_price": 10.8
+  },
+  "2024-20": {
+    "title": "2024年《稻城亚丁》小型张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/241006/1-2410061111060-L-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 28.0
+      }
+    ],
+    "min_price": 28.0,
+    "max_price": 28.0,
+    "latest_price": 28.0
+  },
+  "2024-14": {
+    "title": "2024年封神演义（一）小型张 哪吒闹东海",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/240810/1-240Q0193R30-L-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 42.0
+      }
+    ],
+    "min_price": 42.0,
+    "max_price": 42.0,
+    "latest_price": 42.0
+  },
+  "2024-16": {
+    "title": "《莫高窟（二）》小型张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/240810/1-240Q0201131454-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 24.0
+      }
+    ],
+    "min_price": 24.0,
+    "max_price": 24.0,
+    "latest_price": 24.0
+  },
+  "2023-27": {
+    "title": "《世界文化遗产——平遥古城》小全张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/231209/1-2312091130410-L-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 4.99
+      }
+    ],
+    "min_price": 4.99,
+    "max_price": 4.99,
+    "latest_price": 4.99
+  },
+  "2023-11": {
+    "title": "《现代桥梁建设》小型张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/230722/1-230H21010000-L-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 6.2
+      }
+    ],
+    "min_price": 6.2,
+    "max_price": 6.2,
+    "latest_price": 6.2
+  },
+  "2023-10": {
+    "title": "《货郎图》小型张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/230722/1-230H20946000-L-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 9.0
+      }
+    ],
+    "min_price": 9.0,
+    "max_price": 9.0,
+    "latest_price": 9.0
+  },
+  "2023-5": {
+    "title": "《西游记》（五）小型张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/230722/1-230H2163P40-L-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 9.0
+      }
+    ],
+    "min_price": 9.0,
+    "max_price": 9.0,
+    "latest_price": 9.0
+  },
+  "2022-24": {
+    "title": "《张仲景》小型张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/221120/1-2211202103000-L-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 5.5
+      }
+    ],
+    "min_price": 5.5,
+    "max_price": 5.5,
+    "latest_price": 5.5
+  },
+  "2022-23": {
+    "title": "《中国共产党第二十次全国代表大会》小型张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/221120/1-2211202049520-L-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 9.0
+      }
+    ],
+    "min_price": 9.0,
+    "max_price": 9.0,
+    "latest_price": 9.0
+  },
+  "2022-10": {
+    "title": "《洞庭湖》小型张邮票",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220729/1-220H91A4310-L-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 7.0
+      }
+    ],
+    "min_price": 7.0,
+    "max_price": 7.0,
+    "latest_price": 7.0
+  },
+  "2022-3": {
+    "title": "《红楼梦（五）》小型张邮票",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220521/1-220521161242644-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 13.5
+      }
+    ],
+    "min_price": 13.5,
+    "max_price": 13.5,
+    "latest_price": 13.5
+  },
+  "2021-20T": {
+    "title": "2021-20M 江山如此多娇小型张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/211016/1-2110161934510-L-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 17.0
+      }
+    ],
+    "min_price": 17.0,
+    "max_price": 17.0,
+    "latest_price": 17.0
+  },
+  "2021-19": {
+    "title": "中华人民共和国第十四届运动会 小全张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/211016/1-2110161H4350-L-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 3.5
+      }
+    ],
+    "min_price": 3.5,
+    "max_price": 3.5,
+    "latest_price": 3.5
+  },
+  "2021-12": {
+    "title": "北京2022年冬奥会——竞赛场馆 小型张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/211016/1-2110161A6190-L-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 6.9
+      }
+    ],
+    "min_price": 6.9,
+    "max_price": 6.9,
+    "latest_price": 6.9
+  },
+  "2021-4": {
+    "title": "2021-4M 五牛图小型张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/211016/1-211016141T50-L-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 14.0
+      }
+    ],
+    "min_price": 14.0,
+    "max_price": 14.0,
+    "latest_price": 14.0
+  },
+  "2020-14": {
+    "title": "《莫高窟》 小型张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/211016/1-2110161251120-L-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 7.8
+      }
+    ],
+    "min_price": 7.8,
+    "max_price": 7.8,
+    "latest_price": 7.8
+  },
+  "2020-18": {
+    "title": "华佗小型张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/211010/1-211010215H00-L-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 6.5
+      }
+    ],
+    "min_price": 6.5,
+    "max_price": 6.5,
+    "latest_price": 6.5
+  },
+  "2020-16": {
+    "title": "故宫博物院（二）小型张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/211008/1-21100Q334410-L-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 8.0
+      }
+    ],
+    "min_price": 8.0,
+    "max_price": 8.0,
+    "latest_price": 8.0
+  },
+  "2019年12月20日": {
+    "title": "澳门回归祖国二十周年小全张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/211008/1-21100Q305010-L-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 75.0
+      }
+    ],
+    "min_price": 75.0,
+    "max_price": 75.0,
+    "latest_price": 75.0
+  },
+  "2020-9": {
+    "title": "2020-9M 中国古典文学名著——《红楼梦》（四）小型张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/200603/1-2006031003580-L-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 16.0
+      }
+    ],
+    "min_price": 16.0,
+    "max_price": 16.0,
+    "latest_price": 16.0
+  },
+  "2019-23": {
+    "title": "2019-23M 中华人民共和国成立七十周年 国庆 小型张                0",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/5m1io1qwfvx-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 15.0
+      }
+    ],
+    "min_price": 15.0,
+    "max_price": 15.0,
+    "latest_price": 15.0
+  },
+  "2019-21": {
+    "title": "2019-21M 粤港澳大湾区 小全张                0",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/fbmytadi2u5-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 21.0
+      }
+    ],
+    "min_price": 21.0,
+    "max_price": 21.0,
+    "latest_price": 21.0
+  },
+  "2019-19": {
+    "title": "2019-19M 鲁班 小型张                0",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/vxjr3myboj0-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 12.0
+      }
+    ],
+    "min_price": 12.0,
+    "max_price": 12.0,
+    "latest_price": 12.0
+  },
+  "2019-16": {
+    "title": "2019-16M 五岳图 小全张                0",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/sy3rupgercv-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 21.0
+      }
+    ],
+    "min_price": 21.0,
+    "max_price": 21.0,
+    "latest_price": 21.0
+  },
+  "2019-12": {
+    "title": "2019-12M 中国2019世界集邮展览特供邮品 曾侯乙尊盘(单雕版)小型张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/fvzzmtsncsc-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 102.0
+      },
+      {
+        "date": "2025-08-23",
+        "price": 15.0
+      }
+    ],
+    "min_price": 15.0,
+    "max_price": 102.0,
+    "latest_price": 15.0
+  },
+  "2018-8": {
+    "title": "2018-8M 中国古典文学名著——《红楼梦》（三）双联小型张 雅结海棠社",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/mqqcr2v3qi2-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 32.0
+      },
+      {
+        "date": "2025-08-23",
+        "price": 9.0
+      }
+    ],
+    "min_price": 9.0,
+    "max_price": 32.0,
+    "latest_price": 9.0
+  },
+  "2019-6": {
+    "title": "2019-6M 中国古典文学名著西游记（三）小型张 众神收青牛",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/0homrz011wg-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 15.0
+      }
+    ],
+    "min_price": 15.0,
+    "max_price": 15.0,
+    "latest_price": 15.0
+  },
+  "2018-34": {
+    "title": "2018-34M 改革开放四十周年 邮票 小型张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/onoy4n04ood-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 8.0
+      }
+    ],
+    "min_price": 8.0,
+    "max_price": 8.0,
+    "latest_price": 8.0
+  },
+  "2018-31": {
+    "title": "2018-31 港珠澳大桥 三地联发小全张 大陆版",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/uyjhf4wai22-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 96.0
+      }
+    ],
+    "min_price": 96.0,
+    "max_price": 96.0,
+    "latest_price": 96.0
+  },
+  "2018-23": {
+    "title": "2018-23M 长江经济带 小全张                0",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/xkr2xwxuhuk-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 9.0
+      }
+    ],
+    "min_price": 9.0,
+    "max_price": 9.0,
+    "latest_price": 9.0
+  },
+  "2018-20": {
+    "title": "2018-20M 四景山水图 小全张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/2r00s4hi0up-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 12.0
+      }
+    ],
+    "min_price": 12.0,
+    "max_price": 12.0,
+    "latest_price": 12.0
+  },
+  "2018-15": {
+    "title": "2018-15M 屈原 邮票 小型张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/gwsn1d0yljq-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 6.0
+      }
+    ],
+    "min_price": 6.0,
+    "max_price": 6.0,
+    "latest_price": 6.0
+  },
+  "2017-29": {
+    "title": "2017-29M 中国高速铁路发展成就 双联小型张 高铁双联",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/toylw25vxcl-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 25.0
+      }
+    ],
+    "min_price": 25.0,
+    "max_price": 25.0,
+    "latest_price": 25.0
+  },
+  "2017年11月25日": {
+    "title": "2017-29M 中国高速铁路发展成就 小型张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/olh4gzqetre-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 8.0
+      }
+    ],
+    "min_price": 8.0,
+    "max_price": 8.0,
+    "latest_price": 8.0
+  },
+  "2017-26": {
+    "title": "2017-26M 中国共产党第十九次全国代表大会 十九大 小型张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/1d1oobc544x-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 8.0
+      }
+    ],
+    "min_price": 8.0,
+    "max_price": 8.0,
+    "latest_price": 8.0
+  },
+  "2017-24": {
+    "title": "2017-24M 张骞 小型张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/bte3njatcz2-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 7.0
+      }
+    ],
+    "min_price": 7.0,
+    "max_price": 7.0,
+    "latest_price": 7.0
+  },
+  "2017-20": {
+    "title": "2017-20M 中华人民共和国第十三届运动会 全运会 小全张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/knfc24f42hj-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 4.0
+      }
+    ],
+    "min_price": 4.0,
+    "max_price": 4.0,
+    "latest_price": 4.0
+  },
+  "2017-18": {
+    "title": "2017-18M 中国人民解放军建军九十周年 小型张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/mafcejhzi45-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 7.0
+      }
+    ],
+    "min_price": 7.0,
+    "max_price": 7.0,
+    "latest_price": 7.0
+  },
+  "2017-16": {
+    "title": "2017-16 香港回归祖国二十周年 两地联发小全张 大陆版",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/0ew0sy2mnnd-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 33.0
+      }
+    ],
+    "min_price": 33.0,
+    "max_price": 33.0,
+    "latest_price": 33.0
+  },
+  "2017-11": {
+    "title": "2017-11M 中国恐龙 小型张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/cuksvbasqvp-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 6.0
+      }
+    ],
+    "min_price": 6.0,
+    "max_price": 6.0,
+    "latest_price": 6.0
+  },
+  "2017-5": {
+    "title": "2017-5M 京津冀协同发展小全张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/i5zvmtzw53q-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 6.0
+      }
+    ],
+    "min_price": 6.0,
+    "max_price": 6.0,
+    "latest_price": 6.0
+  },
+  "2016-33": {
+    "title": "2016-33M 中国2016亚洲国际集邮展览 双联小型张 亚展双联",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/pxxwopucwfw-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 32.0
+      },
+      {
+        "date": "2025-08-23",
+        "price": 6.0
+      }
+    ],
+    "min_price": 6.0,
+    "max_price": 32.0,
+    "latest_price": 6.0
+  },
+  "2016-32": {
+    "title": "2016-32 孙中山诞生150周年 三地联发小全张 大陆版",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/5x1kjdj23ey-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 35.0
+      }
+    ],
+    "min_price": 35.0,
+    "max_price": 35.0,
+    "latest_price": 35.0
+  },
+  "2016-26": {
+    "title": "2016-26M 海上丝绸之路 小全张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/zv2wdpkg01q-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 8.0
+      }
+    ],
+    "min_price": 8.0,
+    "max_price": 8.0,
+    "latest_price": 8.0
+  },
+  "2016-24": {
+    "title": "2016-24M 玄奘 小型张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/sc2oqlcajzw-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 7.0
+      }
+    ],
+    "min_price": 7.0,
+    "max_price": 7.0,
+    "latest_price": 7.0
+  },
+  "2016-15": {
+    "title": "2016-15M 中国古典文学名著《红楼梦》（二）小型张 归省庆元宵（元春省亲）",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/mdrpgxng34v-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 10.0
+      }
+    ],
+    "min_price": 10.0,
+    "max_price": 10.0,
+    "latest_price": 10.0
+  },
+  "2016-14": {
+    "title": "2016-14M 上海迪士尼 邮票 小全张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/fdco3hn4jqf-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 6.0
+      }
+    ],
+    "min_price": 6.0,
+    "max_price": 6.0,
+    "latest_price": 6.0
+  },
+  "2016-5": {
+    "title": "2016-5M 高逸图 邮票 小型张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/agllja4idzx-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 9.0
+      }
+    ],
+    "min_price": 9.0,
+    "max_price": 9.0,
+    "latest_price": 9.0
+  },
+  "普32M": {
+    "title": "普32M美丽中国(一)龙胜梯田 四方连邮票张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/jv4ionor1tf-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 43.0
+      }
+    ],
+    "min_price": 43.0,
+    "max_price": 43.0,
+    "latest_price": 43.0
+  },
+  "2016-4": {
+    "title": "中国邮政开办120周年特殊小全张 年年有余/喜临门",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/bix1jhuzcir-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 15.0
+      }
+    ],
+    "min_price": 15.0,
+    "max_price": 15.0,
+    "latest_price": 15.0
+  },
+  "2015-5": {
+    "title": "2015-5M 挥扇仕女图 丝绸 绢质小型张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/1t2vdwwgblr-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 75.0
+      },
+      {
+        "date": "2025-08-23",
+        "price": 14.0
+      }
+    ],
+    "min_price": 14.0,
+    "max_price": 75.0,
+    "latest_price": 14.0
+  },
+  "2015-20": {
+    "title": "2015-20M 中国人民抗日战争暨世界反法西斯战争胜利七十周年 抗战 小型张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/mmz1akavuva-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 8.0
+      }
+    ],
+    "min_price": 8.0,
+    "max_price": 8.0,
+    "latest_price": 8.0
+  },
+  "2015-16": {
+    "title": "2015-16M 包公 小型张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/oj5fcrd5hiw-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 9.0
+      }
+    ],
+    "min_price": 9.0,
+    "max_price": 9.0,
+    "latest_price": 9.0
+  },
+  "2015-15": {
+    "title": "2015-15M 中国梦人民幸福 (中国梦系列第三组) 小全张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/jjn2c5tyhf2-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 9.0
+      }
+    ],
+    "min_price": 9.0,
+    "max_price": 9.0,
+    "latest_price": 9.0
+  },
+  "2014-10": {
+    "title": "2014-10M 唐卡 双联小型张 唐卡双联",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/jud14rvzgt1-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 32.0
+      },
+      {
+        "date": "2025-08-23",
+        "price": 8.5
+      }
+    ],
+    "min_price": 8.5,
+    "max_price": 32.0,
+    "latest_price": 8.5
+  },
+  "2015-8": {
+    "title": "2015-8M 中国古典文学名著《西游记》（一）小型张 大闹天宫",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/zczv01nnfcn-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 13.0
+      }
+    ],
+    "min_price": 13.0,
+    "max_price": 13.0,
+    "latest_price": 13.0
+  },
+  "2014-22": {
+    "title": "2014-22M 中国梦——民族振兴(中国梦系列第二组)小全张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/x2bmra0djzv-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 10.0
+      }
+    ],
+    "min_price": 10.0,
+    "max_price": 10.0,
+    "latest_price": 10.0
+  },
+  "2014-18": {
+    "title": "2014-18M 诸葛亮 小型张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/ikzoukbnmau-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 11.0
+      }
+    ],
+    "min_price": 11.0,
+    "max_price": 11.0,
+    "latest_price": 11.0
+  },
+  "2014-13": {
+    "title": "2014-13M 中国古典文学名著《红楼梦》（一） 小型张 梦游太虚幻境",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/5g2ey3whlbc-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 12.0
+      }
+    ],
+    "min_price": 12.0,
+    "max_price": 12.0,
+    "latest_price": 12.0
+  },
+  "2014-4": {
+    "title": "2014-4M 浴马图 小型张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/ndccx5jmr2l-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 15.0
+      }
+    ],
+    "min_price": 15.0,
+    "max_price": 15.0,
+    "latest_price": 15.0
+  },
+  "2013-10": {
+    "title": "2013-10M 中华全国集邮联合会第七次代表大会 双联小型张 七邮双联",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/dcfxcqcfjek-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 28.0
+      },
+      {
+        "date": "2025-08-23",
+        "price": 7.0
+      }
+    ],
+    "min_price": 7.0,
+    "max_price": 28.0,
+    "latest_price": 7.0
+  },
+  "2013-19": {
+    "title": "2013-19M 中华人民共和国第十二届运动会 全运会 小全张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/lvtcye2g5i5-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 6.0
+      }
+    ],
+    "min_price": 6.0,
+    "max_price": 6.0,
+    "latest_price": 6.0
+  },
+  "2013-16": {
+    "title": "2013-16M 龙虎山 小型张 仙班迎宾",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/cslr3vorvb2-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 8.0
+      }
+    ],
+    "min_price": 8.0,
+    "max_price": 8.0,
+    "latest_price": 8.0
+  },
+  "2013-14": {
+    "title": "2013-14M 金铜佛造像 小型张 铜鎏金佛教造像",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/e4qjkfmzhtb-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 9.0
+      }
+    ],
+    "min_price": 9.0,
+    "max_price": 9.0,
+    "latest_price": 9.0
+  },
+  "2013-8": {
+    "title": "2013-8M 捣练图 小型张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/rb4bbuhgasu-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 15.0
+      }
+    ],
+    "min_price": 15.0,
+    "max_price": 15.0,
+    "latest_price": 15.0
+  },
+  "2012-26": {
+    "title": "2012-26M 中国共产党第十八次全国代表大会 双联小型张 十八大双联",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/fxsk15elokh-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 38.0
+      }
+    ],
+    "min_price": 38.0,
+    "max_price": 38.0,
+    "latest_price": 38.0
+  },
+  "2012-26M": {
+    "title": "中国共产党第十八次全国代表大会（小型张）",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/2013112595327-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 14.0
+      }
+    ],
+    "min_price": 14.0,
+    "max_price": 14.0,
+    "latest_price": 14.0
+  },
+  "2012-22": {
+    "title": "2012-22M 三星堆青铜器 小型张 大立人像",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/lqwal1o2dju-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 9.0
+      }
+    ],
+    "min_price": 9.0,
+    "max_price": 9.0,
+    "latest_price": 9.0
+  },
+  "2012-21": {
+    "title": "2012-21M 和田玉 小全张(凹凸版印刷)",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/myyzlsrnw4m-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 9.0
+      }
+    ],
+    "min_price": 9.0,
+    "max_price": 9.0,
+    "latest_price": 9.0
+  },
+  "2012-19": {
+    "title": "2012-19M 丝绸之路 小型张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/rjyszjen3n5-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 11.0
+      }
+    ],
+    "min_price": 11.0,
+    "max_price": 11.0,
+    "latest_price": 11.0
+  },
+  "2011-29": {
+    "title": "2011-29M 中国2011——第27届亚洲国际集邮展览 双联小型张 亚展双联 无锡双联",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/lap02br0nzl-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 43.0
+      },
+      {
+        "date": "2025-08-23",
+        "price": 38.0
+      },
+      {
+        "date": "2025-08-23",
+        "price": 9.0
+      }
+    ],
+    "min_price": 9.0,
+    "max_price": 43.0,
+    "latest_price": 9.0
+  },
+  "2011-27": {
+    "title": "2011-27M 天津滨海新区 小型张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/zctlj34nzpj-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 8.0
+      }
+    ],
+    "min_price": 8.0,
+    "max_price": 8.0,
+    "latest_price": 8.0
+  },
+  "2011-26": {
+    "title": "2011-26M 美好新家园 小型张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/n5aomofh2wl-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 8.0
+      }
+    ],
+    "min_price": 8.0,
+    "max_price": 8.0,
+    "latest_price": 8.0
+  },
+  "2011-24": {
+    "title": "2011-24M 辛亥革命一百周年 小型张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/qdqt3gmfd35-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 8.0
+      }
+    ],
+    "min_price": 8.0,
+    "max_price": 8.0,
+    "latest_price": 8.0
+  },
+  "2011-23": {
+    "title": "2011-23M 关公 小型张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/guoufcha1n0-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 14.0
+      }
+    ],
+    "min_price": 14.0,
+    "max_price": 14.0,
+    "latest_price": 14.0
+  },
+  "2011-16": {
+    "title": "2011-16M 中国共产党成立九十周年 建党 小型张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/mmxkouwuoft-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 11.0
+      }
+    ],
+    "min_price": 11.0,
+    "max_price": 11.0,
+    "latest_price": 11.0
+  },
+  "2011-12": {
+    "title": "2011-12M 云锦 小全张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/hknjv1rr4sj-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 12.0
+      }
+    ],
+    "min_price": 12.0,
+    "max_price": 12.0,
+    "latest_price": 12.0
+  },
+  "2010-3": {
+    "title": "2010-3M 上海世博园 双联小型张 世博双联",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/0lxqki4s3me-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 35.0
+      }
+    ],
+    "min_price": 35.0,
+    "max_price": 35.0,
+    "latest_price": 35.0
+  },
+  "1992-8M": {
+    "title": "第二十五届奥林匹克运动会(小型张)",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/20131123171814-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 7.0
+      }
+    ],
+    "min_price": 7.0,
+    "max_price": 7.0,
+    "latest_price": 7.0
+  },
+  "无编号": {
+    "title": "第十一届亚洲运动会国际体育集邮展览(小型张)",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/20131122143315-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 88.0
+      }
+    ],
+    "min_price": 88.0,
+    "max_price": 88.0,
+    "latest_price": 88.0
+  },
+  "1992-11": {
+    "title": "1992-11 敦煌壁画(四)小型张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/201412015653-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 7.0
+      }
+    ],
+    "min_price": 7.0,
+    "max_price": 7.0,
+    "latest_price": 7.0
+  },
+  "1993-17": {
+    "title": "1993-17M 毛泽东同志诞生一百周年（小型张）",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/c3byiz4gjme-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 10.0
+      }
+    ],
+    "min_price": 10.0,
+    "max_price": 10.0,
+    "latest_price": 10.0
+  },
+  "1996-26M": {
+    "title": "1996-26M 上海浦东（小型张）",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/20131123164124-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 15.0
+      },
+      {
+        "date": "2025-08-23",
+        "price": 25.0
+      }
+    ],
+    "min_price": 15.0,
+    "max_price": 25.0,
+    "latest_price": 25.0
+  },
+  "1995-7": {
+    "title": "世乒赛小型张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/2014120152422-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 35.0
+      }
+    ],
+    "min_price": 35.0,
+    "max_price": 35.0,
+    "latest_price": 35.0
+  },
+  "1996-4M": {
+    "title": "中国邮政开办一百周年(小型张)",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/201311259588-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 9.0
+      }
+    ],
+    "min_price": 9.0,
+    "max_price": 9.0,
+    "latest_price": 9.0
+  },
+  "1996-11M": {
+    "title": "1996中国—第九届亚洲国际集邮展览（小型张）（有齿）",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/20131125163143-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 10.0
+      }
+    ],
+    "min_price": 10.0,
+    "max_price": 10.0,
+    "latest_price": 10.0
+  },
+  "1996-20M": {
+    "title": "敦煌壁画(第六组)(小型张)",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/20131125103350-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 12.0
+      }
+    ],
+    "min_price": 12.0,
+    "max_price": 12.0,
+    "latest_price": 12.0
+  },
+  "1996－11M": {
+    "title": "1996中国—第九届亚洲国际集邮展览（小型张）（宝鼎无齿）",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/20131125163037-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 25.0
+      }
+    ],
+    "min_price": 25.0,
+    "max_price": 25.0,
+    "latest_price": 25.0
+  },
+  "1997-10M": {
+    "title": "1997-10M 香港回归祖国(金箔小型张)",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/ciyieqi4cxn-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 58.0
+      }
+    ],
+    "min_price": 58.0,
+    "max_price": 58.0,
+    "latest_price": 58.0
+  },
+  "1997-21": {
+    "title": "1997-21M 中国古典文学名著——《水浒传》（第五组）（小型张）梁山英雄排座次",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/cwnhjk25xvn-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 10.0
+      }
+    ],
+    "min_price": 10.0,
+    "max_price": 10.0,
+    "latest_price": 10.0
+  },
+  "1998-6": {
+    "title": "1998-6M 九寨沟（小型张）长海",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/5gtrmkfmqwy-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 6.5
+      }
+    ],
+    "min_price": 6.5,
+    "max_price": 6.5,
+    "latest_price": 6.5
+  },
+  "1998-16": {
+    "title": "1998-16M 锡林郭勒草原（小型张）",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/0gguypps4ei-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 7.5
+      }
+    ],
+    "min_price": 7.5,
+    "max_price": 7.5,
+    "latest_price": 7.5
+  },
+  "1998-18": {
+    "title": "1998-18M 中国古典文学名著《三国演义》（第五组）小型张空城计",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/3tcw1p4ot4u-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 9.0
+      }
+    ],
+    "min_price": 9.0,
+    "max_price": 9.0,
+    "latest_price": 9.0
+  },
+  "1998-23T": {
+    "title": "1998-23M 炎帝陵（小全张）",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/pkvm1uknptt-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 9.0
+      }
+    ],
+    "min_price": 9.0,
+    "max_price": 9.0,
+    "latest_price": 9.0
+  },
+  "1999-7": {
+    "title": "1999-7M 中国1999世界集邮展览 九龙壁（小型张）",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/eaednrnd025-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 12.0
+      }
+    ],
+    "min_price": 12.0,
+    "max_price": 12.0,
+    "latest_price": 12.0
+  },
+  "1999-9": {
+    "title": "1999-9M 第二十二届万国邮政联盟大会（小型张）江泽民主席题词",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/jxgwlaidmle-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 8.0
+      }
+    ],
+    "min_price": 8.0,
+    "max_price": 8.0,
+    "latest_price": 8.0
+  },
+  "1999-18M": {
+    "title": "1999-18M 澳门回归祖国(小型张)",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/iibfdeapvq0-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 9.0
+      }
+    ],
+    "min_price": 9.0,
+    "max_price": 9.0,
+    "latest_price": 9.0
+  },
+  "1999-18J": {
+    "title": "1999-18M 澳门回归祖国(金箔小型张)",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/abtecx25wlv-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 48.0
+      }
+    ],
+    "min_price": 48.0,
+    "max_price": 48.0,
+    "latest_price": 48.0
+  },
+  "2000-2": {
+    "title": "2000-2M 春节（小型张）合家欢",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/y4fhvse44pl-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 9.5
+      }
+    ],
+    "min_price": 9.5,
+    "max_price": 9.5,
+    "latest_price": 9.5
+  },
+  "2000-5": {
+    "title": "2000-5M 中华全国集邮联合会第五次代表大会(小型张)",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/ccvy0neryxo-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 9.0
+      }
+    ],
+    "min_price": 9.0,
+    "max_price": 9.0,
+    "latest_price": 9.0
+  },
+  "2000-14": {
+    "title": "2000-14M 崂山（小全张）",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/5k5g0ouqgfu-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 9.5
+      }
+    ],
+    "min_price": 9.5,
+    "max_price": 9.5,
+    "latest_price": 9.5
+  },
+  "2000-17": {
+    "title": "2000-17M 第27届奥林匹克运动会(小型张)",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/co5m0hws5jg-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 9.5
+      }
+    ],
+    "min_price": 9.5,
+    "max_price": 9.5,
+    "latest_price": 9.5
+  },
+  "2000-24": {
+    "title": "2000-24M 君子兰（小全张）",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/1vmn51f2lui-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 12.0
+      }
+    ],
+    "min_price": 12.0,
+    "max_price": 12.0,
+    "latest_price": 12.0
+  },
+  "2000-特1M": {
+    "title": "2000-特1M 港澳回归　世纪盛事（双加字金箔小型张）",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/1hogiwsmumc-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 158.0
+      }
+    ],
+    "min_price": 158.0,
+    "max_price": 158.0,
+    "latest_price": 158.0
+  },
+  "2001-7": {
+    "title": "2001-7M 中国古典文学名著——《聊斋志异》（第一组）（小型张）崂山道士",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/5yuwwjt0bbf-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 12.0
+      }
+    ],
+    "min_price": 12.0,
+    "max_price": 12.0,
+    "latest_price": 12.0
+  },
+  "2001-8": {
+    "title": "2001-8M 武当山（小型张）金顶春晓",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/soloy2fpo10-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 11.0
+      }
+    ],
+    "min_price": 11.0,
+    "max_price": 11.0,
+    "latest_price": 11.0
+  },
+  "2001-13": {
+    "title": "2001-13M 黄果树瀑布群（小型张）",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/og2claizci2-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 9.5
+      }
+    ],
+    "min_price": 9.5,
+    "max_price": 9.5,
+    "latest_price": 9.5
+  },
+  "2001-17M": {
+    "title": "2001-17M 二滩水电站(小型张)",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/mczq1buyxzt-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 11.5
+      }
+    ],
+    "min_price": 11.5,
+    "max_price": 11.5,
+    "latest_price": 11.5
+  },
+  "2001-18": {
+    "title": "2001-18M 兜兰（小全张）",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/k4mtfyrohsj-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 10.0
+      }
+    ],
+    "min_price": 10.0,
+    "max_price": 10.0,
+    "latest_price": 10.0
+  },
+  "2001-24": {
+    "title": "2001-24M 中华人民共和国第九届运动会（小全张）",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/hcs1fhcbi2i-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 7.5
+      }
+    ],
+    "min_price": 7.5,
+    "max_price": 7.5,
+    "latest_price": 7.5
+  },
+  "2001-28M": {
+    "title": "2001-28M 青藏铁路开工纪念(小型张)",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/qc5punsresf-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 9.0
+      }
+    ],
+    "min_price": 9.0,
+    "max_price": 9.0,
+    "latest_price": 9.0
+  },
+  "2002-5M": {
+    "title": "2002-5M 步辇图（小型张）",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/h4pfnlaa2xf-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 20.0
+      }
+    ],
+    "min_price": 20.0,
+    "max_price": 20.0,
+    "latest_price": 20.0
+  },
+  "2002-9": {
+    "title": "2002-9M 丽江古城（小全张）",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/dbpjjlroayt-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 10.0
+      }
+    ],
+    "min_price": 10.0,
+    "max_price": 10.0,
+    "latest_price": 10.0
+  },
+  "2002-12": {
+    "title": "2002-12M 黄河水利水电工程（小型张）",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/lacxllp4e5j-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 9.0
+      }
+    ],
+    "min_price": 9.0,
+    "max_price": 9.0,
+    "latest_price": 9.0
+  },
+  "2002-13": {
+    "title": "2002-13M 大足石刻（小型张）",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/vlvysfhd2vv-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 11.0
+      }
+    ],
+    "min_price": 11.0,
+    "max_price": 11.0,
+    "latest_price": 11.0
+  },
+  "2002-21GM": {
+    "title": "2002-21M 黄河壶口瀑布(金箔小型张)",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/avkxjr0kico-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 42.0
+      }
+    ],
+    "min_price": 42.0,
+    "max_price": 42.0,
+    "latest_price": 42.0
+  },
+  "2004-24": {
+    "title": "2004-24M 边陲风光 小全张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/4o4swyxfwvc-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 26.0
+      }
+    ],
+    "min_price": 26.0,
+    "max_price": 26.0,
+    "latest_price": 26.0
+  },
+  "2004-2": {
+    "title": "2004-2M 桃花坞木版年画（小全张）",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/g54rafotiya-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 15.0
+      }
+    ],
+    "min_price": 15.0,
+    "max_price": 15.0,
+    "latest_price": 15.0
+  },
+  "2004-6M": {
+    "title": "2004-6M 孔雀（小型张）",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/ewrcls405tm-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 12.0
+      }
+    ],
+    "min_price": 12.0,
+    "max_price": 12.0,
+    "latest_price": 12.0
+  },
+  "2003-4": {
+    "title": "2003-4M 百合花(小型张)",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/j4rllm2po0j-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 14.0
+      }
+    ],
+    "min_price": 14.0,
+    "max_price": 14.0,
+    "latest_price": 14.0
+  },
+  "2003-7M": {
+    "title": "2003-7M 乐山大佛(小型张)",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/uqcsgowoeqe-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 16.0
+      }
+    ],
+    "min_price": 16.0,
+    "max_price": 16.0,
+    "latest_price": 16.0
+  },
+  "2003-8": {
+    "title": "2003-8M 鼓浪屿(小全张)",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/rggfgglukyd-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 16.0
+      }
+    ],
+    "min_price": 16.0,
+    "max_price": 16.0,
+    "latest_price": 16.0
+  },
+  "2003-9": {
+    "title": "2003-9M聊斋志异（第三组）（小型张）西湖主",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/0hj4yo40dn5-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 17.0
+      }
+    ],
+    "min_price": 17.0,
+    "max_price": 17.0,
+    "latest_price": 17.0
+  },
+  "2003-16": {
+    "title": "2003-16M 少数民族传统体育（小全张）",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/gfns5k20qam-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 6.0
+      }
+    ],
+    "min_price": 6.0,
+    "max_price": 6.0,
+    "latest_price": 6.0
+  },
+  "2003-22M": {
+    "title": "2003-22M 南水北调工程开工纪念(小型张)",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/220200518/pc0bmwoern4-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 18.0
+      }
+    ],
+    "min_price": 18.0,
+    "max_price": 18.0,
+    "latest_price": 18.0
+  },
+  "1995-19M": {
+    "title": "国际邮票、钱币博览会　北京1995（小全张）（桂花无齿）",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/20131125105446-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 250.0
+      }
+    ],
+    "min_price": 250.0,
+    "max_price": 250.0,
+    "latest_price": 250.0
+  },
+  "纪33M": {
+    "title": "中国古代科学家（第一组）",
+    "series_type": "纪念邮票",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/2013112384220-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 2100.0
+      }
+    ],
+    "min_price": 2100.0,
+    "max_price": 2100.0,
+    "latest_price": 2100.0
+  },
+  "纪50M": {
+    "title": "关汉卿戏剧创作七百年",
+    "series_type": "纪念邮票",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/2013112384352-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 4800.0
+      }
+    ],
+    "min_price": 4800.0,
+    "max_price": 4800.0,
+    "latest_price": 4800.0
+  },
+  "特61M": {
+    "title": "牡丹小型张",
+    "series_type": "特种邮票",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/2013112384651-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 19000.0
+      }
+    ],
+    "min_price": 19000.0,
+    "max_price": 19000.0,
+    "latest_price": 19000.0
+  },
+  "纪106M": {
+    "title": "中华人民共和国成立十五周年",
+    "series_type": "纪念邮票",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/20131122121919-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 32000.0
+      }
+    ],
+    "min_price": 32000.0,
+    "max_price": 32000.0,
+    "latest_price": 32000.0
+  },
+  "纪94M": {
+    "title": "梅兰芳舞台艺术（小型张）",
+    "series_type": "纪念邮票",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/201311238456-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 150000.0
+      }
+    ],
+    "min_price": 150000.0,
+    "max_price": 150000.0,
+    "latest_price": 150000.0
+  },
+  "J103M": {
+    "title": "第二十三届奥运会小型张",
+    "series_type": "纪字号",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/2013112216634-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 52.0
+      }
+    ],
+    "min_price": 52.0,
+    "max_price": 52.0,
+    "latest_price": 52.0
+  },
+  "J176M": {
+    "title": "和平解放西藏四十周年（小型张）",
+    "series_type": "纪字号",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/2013112811320-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 17.0
+      }
+    ],
+    "min_price": 17.0,
+    "max_price": 17.0,
+    "latest_price": 17.0
+  },
+  "1993-13M": {
+    "title": "中华全国集邮联合会第五次全国代表大会(小型张加字)",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/20131112131435-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 16.0
+      }
+    ],
+    "min_price": 16.0,
+    "max_price": 16.0,
+    "latest_price": 16.0
+  },
+  "1999-7M": {
+    "title": "中国1999世界集邮展览（九龙壁加字小型张）",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/20131126132338-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 16.0
+      }
+    ],
+    "min_price": 16.0,
+    "max_price": 16.0,
+    "latest_price": 16.0
+  },
+  "1993-17M": {
+    "title": "毛泽东同志诞生一百周年（加字小型张）",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/2013111213402-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 18.0
+      }
+    ],
+    "min_price": 18.0,
+    "max_price": 18.0,
+    "latest_price": 18.0
+  },
+  "1993-13": {
+    "title": "97曼谷中国邮票展览（龙门石窟加字小型张）",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/2013111213546-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 10.0
+      },
+      {
+        "date": "2025-08-23",
+        "price": 15.0
+      }
+    ],
+    "min_price": 10.0,
+    "max_price": 15.0,
+    "latest_price": 15.0
+  },
+  "1996-11": {
+    "title": "97上海国际邮票、钱币博览会（宝鼎有齿加字小型张）",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/20131126133215-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 15.0
+      }
+    ],
+    "min_price": 15.0,
+    "max_price": 15.0,
+    "latest_price": 15.0
+  },
+  "1995-12": {
+    "title": "迎’97香港回归祖国集邮博览会（加字小型张）",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/2013111214613-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 8.0
+      }
+    ],
+    "min_price": 8.0,
+    "max_price": 8.0,
+    "latest_price": 8.0
+  },
+  "1993-7": {
+    "title": "中国邮票展览香港 96（加字小型张）",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/20131112141028-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 9.0
+      }
+    ],
+    "min_price": 9.0,
+    "max_price": 9.0,
+    "latest_price": 9.0
+  },
+  "1994-16M": {
+    "title": "万国邮政（加字小型张）",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/20131126133753-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 6.0
+      }
+    ],
+    "min_price": 6.0,
+    "max_price": 6.0,
+    "latest_price": 6.0
+  },
+  "1997-10GM": {
+    "title": "香港回归祖国（加字小型张）",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/20131125949240-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 11.0
+      }
+    ],
+    "min_price": 11.0,
+    "max_price": 11.0,
+    "latest_price": 11.0
+  },
+  "2000-2M": {
+    "title": "春节（加字小型张）",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/2013111213216-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 11.0
+      }
+    ],
+    "min_price": 11.0,
+    "max_price": 11.0,
+    "latest_price": 11.0
+  },
+  "纪47M": {
+    "title": "人民英雄纪念碑（小全张）",
+    "series_type": "纪念邮票",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/201311239325-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 2300.0
+      }
+    ],
+    "min_price": 2300.0,
+    "max_price": 2300.0,
+    "latest_price": 2300.0
+  },
+  "普32": {
+    "title": "普32M 美丽中国（第一组）（小全张）",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/2014424141643-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 90.0
+      }
+    ],
+    "min_price": 90.0,
+    "max_price": 90.0,
+    "latest_price": 90.0
+  },
+  "纪86M": {
+    "title": "第26届世界乒乓球锦标赛（小全张）",
+    "series_type": "纪念邮票",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/20131123133513-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 9600.0
+      }
+    ],
+    "min_price": 9600.0,
+    "max_price": 9600.0,
+    "latest_price": 9600.0
+  },
+  "2008-6M": {
+    "title": "第29届奥林匹克运动会--火炬接力（小全张）",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/20131123145019-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 17.0
+      }
+    ],
+    "min_price": 17.0,
+    "max_price": 17.0,
+    "latest_price": 17.0
+  },
+  "1994-17M": {
+    "title": "中国古典文学名著--《三国演义》(第四组)(小型张)",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/20131123164829-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 7.0
+      }
+    ],
+    "min_price": 7.0,
+    "max_price": 7.0,
+    "latest_price": 7.0
+  },
+  "1994-19M": {
+    "title": "中华全国集邮联合会第四次代表大会(小型张)",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/2013112511543-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 3.0
+      }
+    ],
+    "min_price": 3.0,
+    "max_price": 3.0,
+    "latest_price": 3.0
+  },
+  "1995-12M": {
+    "title": "太湖小型张",
+    "series_type": "其他",
+    "image_url": "http://www.518yp.com/uploads/allimg/20140621/2013112510118-sc.jpg",
+    "price_history": [
+      {
+        "date": "2025-08-23",
+        "price": 5.5
+      }
+    ],
+    "min_price": 5.5,
+    "max_price": 5.5,
+    "latest_price": 5.5
   }
 }
