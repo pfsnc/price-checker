@@ -5,6 +5,8 @@ import re
 from datetime import datetime
 import time
 import random
+import os
+from urllib.parse import urljoin
 
 class StampScraper:
     def __init__(self):
@@ -25,6 +27,10 @@ class StampScraper:
                 'url': 'http://www.518yp.com/xiaoxingzhang',
                 'list_param': '117'
             }
+            'PGHJQJB': {  # 新增普改航欠軍包分類
+                'url': 'http://www.518yp.com/pugaihangqianjunbao',
+                'list_param': '135'
+            }
         }
             
         self.headers = {
@@ -34,6 +40,53 @@ class StampScraper:
             'Connection': 'keep-alive',
             'Referer': 'http://www.518yp.com/'
         }
+        # 確保圖片目錄存在
+        self.img_dir = './img'
+        os.makedirs(self.img_dir, exist_ok=True)
+        
+    def generate_unique_key(self, series_code, title):
+        """生成郵票的唯一鍵"""
+        key = series_code
+        
+        # 檢查是否無齒版本
+        if '无齿' in title:
+            key += '_NH'
+            
+        # 檢查是否再版/改版
+        if any(keyword in title for keyword in ['再版', '改版']):
+            key += '_NEW'
+            
+        return key
+        
+    def download_image(self, img_url, unique_key):
+        """下載並保存圖片"""
+        if not img_url:
+            return None
+            
+        try:
+            # 確定圖片副檔名
+            ext = os.path.splitext(img_url)[1]
+            if not ext:
+                ext = '.jpg'  # 預設使用 jpg
+                
+            # 構建圖片保存路徑
+            img_path = os.path.join(self.img_dir, f'{unique_key}{ext}')
+            
+            # 如果圖片已存在，直接返回路徑
+            if os.path.exists(img_path):
+                return img_path
+                
+            # 下載圖片
+            response = requests.get(img_url, headers=self.headers, timeout=10)
+            if response.status_code == 200:
+                with open(img_path, 'wb') as f:
+                    f.write(response.content)
+                print(f"成功下載圖片: {img_path}")
+                return img_path
+                
+        except Exception as e:
+            print(f"下載圖片失敗 {img_url}: {e}")
+            return None
 
     def get_page_content(self, base_url_info, page=1):
         try:
@@ -171,7 +224,9 @@ class StampScraper:
                 if not series_code:
                     patterns = [
                         r'[JT]\d+M?',  # 匹配 J123/T123 或 J123M/T123M
-                        r'[特文编纪]\d+M?'  # 匹配其他系列
+                        r'[特文纪]\d+M?',  # 匹配其他系列
+                        r'[普改航欠军包]\d+[甲乙丙]?',  # 匹配普改航欠軍包系列
+                        r'^\d+(-\d+)?$'  # 匹配純數字編號
                     ]
                     
                     for pattern in patterns:
@@ -180,46 +235,64 @@ class StampScraper:
                             series_code = match.group()
                             break
                 
+                # 處理純數字編號（編號票）
+                if series_code and series_code.replace('-', '').isdigit():
+                    series_code = f"编{series_code}"
+                
                 # 找到價格
                 price_elem = item.find('font', class_='shop_s')
                 price = None
                 if price_elem:
-                    # 移除￥符號並清理空白
                     price_text = price_elem.text.replace('￥', '').strip()
                     try:
                         price = float(price_text)
-                        print(f"成功解析价格: {price_text} -> {price}")  # 使用簡體字
                     except ValueError:
-                        print(f"无法解析价格文本 '{price_text}'")  # 使用簡體字
+                        print(f"無法解析價格文本 '{price_text}'")
                         continue
                 
+                # 檢查是否為普改航欠軍包系列的網頁
+                is_pghjqjb_page = 'pugaihangqianjunbao' in soup.find('link', rel='canonical').get('href', '')
+                
+                # 如果是普改航欠軍包系列的網頁，只處理相關郵票
+                if is_pghjqjb_page and not (series_code and series_code[0] in ['普', '改', '航', '欠', '军', '包']):
+                    continue
+                
                 if title and series_code and price is not None:
+                    # 為所有郵票生成唯一鍵
+                    unique_key = self.generate_unique_key(series_code, title)
+                    
+                    # 下載圖片
+                    local_img_path = None
+                    if img_url:
+                        local_img_path = self.download_image(img_url, unique_key)
+                    
                     stamp = {
+                        'unique_key': unique_key,
                         'series': series_code,
                         'series_type': self.determine_series_type(series_code),
                         'title': title,
                         'price': price,
                         'date': datetime.now().strftime('%Y-%m-%d'),
-                        'image_url': img_url
+                        'image_path': local_img_path
                     }
                     stamps.append(stamp)
                     print(f"成功解析郵票: {stamp}")
                 else:
                     missing = []
                     if not title:
-                        missing.append("标题")  # 使用簡體字
+                        missing.append("標題")
                     if not series_code:
-                        missing.append("编号")  # 使用簡體字
+                        missing.append("編號")
                     if price is None:
-                        missing.append("价格")  # 使用簡體字
-                    print(f"缺少数据: {', '.join(missing)}")  # 使用簡體字
-                    print(f"当前解析数据: 标题={title}, 编号={series_code}, 价格={price}")  # 使用簡體字
+                        missing.append("價格")
+                    print(f"缺少數據: {', '.join(missing)}")
+                    print(f"當前解析數據: 標題={title}, 編號={series_code}, 價格={price}")
                     
             except Exception as e:
-                print(f"解析邮票项目时发生错误: {e}")  # 使用簡體字
+                print(f"解析郵票項目時發生錯誤: {e}")
                 continue
                 
-        print(f"本页面共解析到 {len(stamps)} 个邮票数据")  # 使用簡體字
+        print(f"本頁面共解析到 {len(stamps)} 個郵票數據")
         return stamps
     
     def determine_series_type(self, series_code):
@@ -240,7 +313,7 @@ class StampScraper:
         return prefix_map.get(first_char, '其他')
     
     def save_data(self, stamps):
-        """以郵票為主體保存數據，記錄每個郵票的價格歷史"""
+        """修改保存數據的邏輯，使用唯一鍵作為索引"""
         if not stamps:
             print("警告：沒有郵票數據可保存")
             return
@@ -258,22 +331,23 @@ class StampScraper:
     
             # 處理每個新抓取的郵票數據
             for new_stamp in stamps:
-                series_code = new_stamp['series']
+                unique_key = new_stamp['unique_key']
                 new_price = new_stamp['price']
     
                 # 如果是新郵票，創建基本結構
-                if series_code not in existing_data:
-                    existing_data[series_code] = {
+                if unique_key not in existing_data:
+                    existing_data[unique_key] = {
                         'title': new_stamp['title'],
+                        'series': new_stamp['series'],
                         'series_type': new_stamp['series_type'],
-                        'image_url': new_stamp.get('image_url'),
+                        'image_path': new_stamp.get('image_path'),
                         'price_history': [],
                         'min_price': new_price,
                         'max_price': new_price,
                         'latest_price': new_price
                     }
     
-                stamp_data = existing_data[series_code]
+                stamp_data = existing_data[unique_key]
                 
                 # 檢查最新價格是否有變化
                 if not stamp_data['price_history'] or stamp_data['latest_price'] != new_price:
@@ -291,8 +365,7 @@ class StampScraper:
                     
                     updates_count += 1
                     print(f"更新郵票價格 - 系列: {series_code}, 新價格: {new_price}")
-    
-            # 只有在有更新時才寫入文件
+                
             if updates_count > 0:
                 with open('data/stamps_data.json', 'w', encoding='utf-8') as f:
                     json.dump(existing_data, f, ensure_ascii=False, indent=2)
@@ -305,7 +378,6 @@ class StampScraper:
         except Exception as e:
             print(f"保存數據時發生錯誤: {e}")
             return False
-
 def main():
     scraper = StampScraper()
     stamps = scraper.scrape_all_series()
