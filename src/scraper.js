@@ -14,7 +14,13 @@ window.StampPriceTracker = function StampPriceTracker() {
         { value: '文', label: '文革系列' },
         { value: '编', label: '編號系列' },
         { value: '纪', label: '紀念系列' },
-        { value: '特', label: '特種系列' }
+        { value: '特', label: '特種系列' },
+        { value: '普', label: '普通系列' },  // 新增普改航欠軍包系列
+        { value: '改', label: '改值系列' },
+        { value: '航', label: '航空系列' },
+        { value: '欠', label: '欠資系列' },
+        { value: '军', label: '軍用系列' },
+        { value: '包', label: '包裹系列' }
     ];
 
     const createProgressBar = (percentage, width = 20) => {
@@ -44,23 +50,19 @@ window.StampPriceTracker = function StampPriceTracker() {
             
             // 將物件轉換為陣列並排序
             const stampsList = Object.entries(data)
-                .map(([series, stampData]) => ({
-                    series,
+                .map(([unique_key, stampData]) => ({
+                    unique_key,
                     ...stampData
                 }))
                 .sort((a, b) => {
                     // 分離字母和數字
-                    const [aLetter, aNum] = a.series.match(/([A-Z文特编纪]*)(\d*)/).slice(1);
-                    const [bLetter, bNum] = b.series.match(/([A-Z文特编纪]*)(\d*)/).slice(1);
+                    const [aLetter, aNum] = a.series.match(/([A-Z文特编纪普改航欠军包]*)(\d*)/).slice(1);
+                    const [bLetter, bNum] = b.series.match(/([A-Z文特编纪普改航欠军包]*)(\d*)/).slice(1);
                     
                     // 定義系列順序
                     const orderMap = {
-                        'J': 1,
-                        'T': 2,
-                        '特': 3,
-                        '文': 4,
-                        '编': 5,
-                        '纪': 6
+                        'J': 1, 'T': 2, '特': 3, '文': 4, '编': 5, '纪': 6,
+                        '普': 7, '改': 8, '航': 9, '欠': 10, '军': 11, '包': 12
                     };
                     
                     // 比較系列
@@ -86,22 +88,14 @@ window.StampPriceTracker = function StampPriceTracker() {
         
         if (series !== 'all') {
             filtered = filtered.filter(stamp => {
-                switch(series) {
-                    case 'J':
-                        return stamp.series.startsWith('J');
-                    case 'T':
-                        return stamp.series.startsWith('T');
-                    case '文':
-                        return stamp.series.startsWith('文');
-                    case '编':
-                        return stamp.series_type === '编号系列';
-                    case '纪':
-                        return stamp.series_type === '纪念邮票';
-                    case '特':
-                        return stamp.series_type === '特种邮票';
-                    default:
-                        return false;
+                // 更新篩選邏輯以包含新系列
+                if (['J', 'T', '文', '特', '纪', '普', '改', '航', '欠', '军', '包'].includes(series)) {
+                    return stamp.series.startsWith(series);
                 }
+                if (series === '编') {
+                    return stamp.series_type === '编年号';
+                }
+                return false;
             });
         }
         
@@ -109,18 +103,13 @@ window.StampPriceTracker = function StampPriceTracker() {
             filtered = filtered.filter(stamp => {
                 const searchTerm = number.toLowerCase();
                 const series = stamp.series.toLowerCase();
+                const uniqueKey = stamp.unique_key.toLowerCase();
                 
-                if (searchTerm.match(/^[jt]\d+$/i)) {
-                    const letter = searchTerm[0].toUpperCase();
-                    const num = searchTerm.slice(1);
-                    return series === (letter + num).toLowerCase();
-                }
-                
-                return series.includes(searchTerm);
+                // 增加對唯一鍵的搜索
+                return series.includes(searchTerm) || uniqueKey.includes(searchTerm);
             });
         }
         
-        // 保持原有順序，因為 stamps 已經排序過了
         setFilteredStamps(filtered);
     };
 
@@ -163,21 +152,21 @@ window.StampPriceTracker = function StampPriceTracker() {
         ]),
 
         e('div', { key: 'stamps-list', className: "stamps-list" },
-            filteredStamps.map((stamp, index) => {
+            filteredStamps.map((stamp) => {
                 const priceRange = stamp.max_price - stamp.min_price;
                 const percentage = priceRange === 0 ? 50 : 
                     ((stamp.latest_price - stamp.min_price) / priceRange) * 100;
                 
                 return e('div', { 
-                    key: `stamp-${stamp.series}-${index}`,
+                    key: stamp.unique_key,
                     className: "stamp-item"
                 }, [
                     e('div', {
-                        key: `image-container-${stamp.series}-${index}`,
+                        key: `image-container-${stamp.unique_key}`,
                         className: "stamp-image-container"
                     }, 
                         e('img', {
-                            src: stamp.image_url,
+                            src: stamp.image_path || 'default-stamp.png',
                             alt: stamp.title,
                             className: "stamp-image",
                             onError: (e) => {
@@ -187,19 +176,19 @@ window.StampPriceTracker = function StampPriceTracker() {
                         })
                     ),
                     e('div', { 
-                        key: `header-${stamp.series}-${index}`,
+                        key: `header-${stamp.unique_key}`,
                         className: "stamp-info"
                     }, [
                         e('span', { 
-                            key: `tag-${stamp.series}-${index}`,
+                            key: `tag-${stamp.unique_key}`,
                             className: "series-tag"
                         }, stamp.series_type),
                         e('span', {
-                            key: `title-${stamp.series}-${index}`,
+                            key: `title-${stamp.unique_key}`,
                             className: "stamp-title"
                         }, `${stamp.series} - ${stamp.title}`),
                         e('span', { 
-                            key: `price-${stamp.series}-${index}`,
+                            key: `price-${stamp.unique_key}`,
                             className: "current-price"
                         }, `¥${stamp.latest_price.toLocaleString()}`)
                     ]),
