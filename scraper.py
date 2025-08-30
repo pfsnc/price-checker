@@ -26,7 +26,7 @@ class StampScraper:
             'M': {  # 新增小型張分類
                 'url': 'http://www.518yp.com/xiaoxingzhang',
                 'list_param': '117'
-            }
+            },
             'PGHJQJB': {  # 新增普改航欠軍包分類
                 'url': 'http://www.518yp.com/pugaihangqianjunbao',
                 'list_param': '135'
