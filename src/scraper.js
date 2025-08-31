@@ -12,15 +12,15 @@ window.StampPriceTracker = function StampPriceTracker() {
         { value: 'J', label: 'J系列' },
         { value: 'T', label: 'T系列' },
         { value: '文', label: '文革系列' },
-        { value: '编', label: '編號系列' },
-        { value: '纪', label: '紀念系列' },
-        { value: '特', label: '特種系列' },
-        { value: '普', label: '普通系列' },
-        { value: '改', label: '改值系列' },
-        { value: '航', label: '航空系列' },
-        { value: '欠', label: '欠資系列' },
-        { value: '军', label: '軍用系列' },
-        { value: '包', label: '包裹系列' }
+        { value: '編', label: '编号系列' },
+        { value: '紀', label: '纪念邮票' },
+        { value: '特', label: '特种邮票' },
+        { value: '普', label: '普' },
+        { value: '改', label: '改' },
+        { value: '航', label: '航' },
+        { value: '欠', label: '欠' },
+        { value: '軍', label: '军' },
+        { value: '包', label: '包' }
     ];
 
     const createProgressBar = (percentage, width = 20) => {
@@ -61,31 +61,29 @@ window.StampPriceTracker = function StampPriceTracker() {
             // 將物件轉換為陣列並排序
             const stampsList = Object.entries(data)
                 .map(([unique_key, stampData]) => {
-                    if (!stampData || !stampData.series) {
+                    if (!stampData || !stampData.series_type) {
                         console.warn('發現無效數據項:', unique_key, stampData);
                         return null;
                     }
                     return {
                         unique_key,
+                        series: unique_key, // 使用 unique_key 作為系列編號
                         ...stampData
                     };
                 })
-                .filter(stamp => stamp !== null) // 移除無效數據
+                .filter(stamp => stamp !== null)
                 .sort((a, b) => {
                     const aInfo = extractSeriesInfo(a.series);
                     const bInfo = extractSeriesInfo(b.series);
                     
-                    // 定義系列順序
                     const orderMap = {
                         'J': 1, 'T': 2, '特': 3, '文': 4, '编': 5, '纪': 6,
                         '普': 7, '改': 8, '航': 9, '欠': 10, '军': 11, '包': 12
                     };
                     
-                    // 比較系列
                     const letterOrder = (orderMap[aInfo.letter] || 99) - (orderMap[bInfo.letter] || 99);
                     if (letterOrder !== 0) return letterOrder;
                     
-                    // 比較數字
                     return parseInt(aInfo.number || 0) - parseInt(bInfo.number || 0);
                 });
             
@@ -110,7 +108,7 @@ window.StampPriceTracker = function StampPriceTracker() {
                     return stamp.series.startsWith(series);
                 }
                 if (series === '编') {
-                    return stamp.series_type === '编年号';
+                    return stamp.series_type === '编号系列';
                 }
                 return false;
             });
@@ -190,7 +188,7 @@ window.StampPriceTracker = function StampPriceTracker() {
                         className: "stamp-image-container"
                     }, 
                         e('img', {
-                            src: stamp.image_path || 'default-stamp.png',
+                            src: stamp.image_url || 'default-stamp.png', // 改用 image_url
                             alt: stamp.title,
                             className: "stamp-image",
                             onError: (e) => {
