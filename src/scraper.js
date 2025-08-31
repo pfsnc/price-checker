@@ -15,7 +15,7 @@ window.StampPriceTracker = function StampPriceTracker() {
         { value: '编', label: '編號系列' },
         { value: '纪', label: '紀念系列' },
         { value: '特', label: '特種系列' },
-        { value: '普', label: '普通系列' },  // 新增普改航欠軍包系列
+        { value: '普', label: '普通系列' },
         { value: '改', label: '改值系列' },
         { value: '航', label: '航空系列' },
         { value: '欠', label: '欠資系列' },
@@ -32,10 +32,20 @@ window.StampPriceTracker = function StampPriceTracker() {
         return bar.join('');
     };
 
-    React.useEffect(() => {
-        fetchData();
-    }, []);
-    
+    const extractSeriesInfo = (series) => {
+        if (!series) return { letter: '', number: '0' };
+        try {
+            const matches = series.match(/([A-Z文特编纪普改航欠军包]*)(\d*)/);
+            return {
+                letter: matches ? matches[1] : '',
+                number: matches ? matches[2] : '0'
+            };
+        } catch (error) {
+            console.error('解析系列編號失敗:', series, error);
+            return { letter: '', number: '0' };
+        }
+    };
+
     const fetchData = async () => {
         try {
             const response = await fetch('./data/stamps_data.json');
@@ -50,14 +60,20 @@ window.StampPriceTracker = function StampPriceTracker() {
             
             // 將物件轉換為陣列並排序
             const stampsList = Object.entries(data)
-                .map(([unique_key, stampData]) => ({
-                    unique_key,
-                    ...stampData
-                }))
+                .map(([unique_key, stampData]) => {
+                    if (!stampData || !stampData.series) {
+                        console.warn('發現無效數據項:', unique_key, stampData);
+                        return null;
+                    }
+                    return {
+                        unique_key,
+                        ...stampData
+                    };
+                })
+                .filter(stamp => stamp !== null) // 移除無效數據
                 .sort((a, b) => {
-                    // 分離字母和數字
-                    const [aLetter, aNum] = a.series.match(/([A-Z文特编纪普改航欠军包]*)(\d*)/).slice(1);
-                    const [bLetter, bNum] = b.series.match(/([A-Z文特编纪普改航欠军包]*)(\d*)/).slice(1);
+                    const aInfo = extractSeriesInfo(a.series);
+                    const bInfo = extractSeriesInfo(b.series);
                     
                     // 定義系列順序
                     const orderMap = {
@@ -66,11 +82,11 @@ window.StampPriceTracker = function StampPriceTracker() {
                     };
                     
                     // 比較系列
-                    const letterOrder = (orderMap[aLetter] || 99) - (orderMap[bLetter] || 99);
+                    const letterOrder = (orderMap[aInfo.letter] || 99) - (orderMap[bInfo.letter] || 99);
                     if (letterOrder !== 0) return letterOrder;
                     
                     // 比較數字
-                    return parseInt(aNum || 0) - parseInt(bNum || 0);
+                    return parseInt(aInfo.number || 0) - parseInt(bInfo.number || 0);
                 });
             
             setStamps(stampsList);
@@ -82,13 +98,14 @@ window.StampPriceTracker = function StampPriceTracker() {
             setLoading(false);
         }
     };
-    
+
     const handleSearch = () => {
         let filtered = [...stamps];
         
         if (series !== 'all') {
             filtered = filtered.filter(stamp => {
-                // 更新篩選邏輯以包含新系列
+                if (!stamp || !stamp.series) return false;
+                
                 if (['J', 'T', '文', '特', '纪', '普', '改', '航', '欠', '军', '包'].includes(series)) {
                     return stamp.series.startsWith(series);
                 }
@@ -101,17 +118,22 @@ window.StampPriceTracker = function StampPriceTracker() {
         
         if (number) {
             filtered = filtered.filter(stamp => {
+                if (!stamp || !stamp.series) return false;
+                
                 const searchTerm = number.toLowerCase();
                 const series = stamp.series.toLowerCase();
                 const uniqueKey = stamp.unique_key.toLowerCase();
                 
-                // 增加對唯一鍵的搜索
                 return series.includes(searchTerm) || uniqueKey.includes(searchTerm);
             });
         }
         
         setFilteredStamps(filtered);
     };
+
+    React.useEffect(() => {
+        fetchData();
+    }, []);
 
     React.useEffect(() => {
         handleSearch();
@@ -153,6 +175,8 @@ window.StampPriceTracker = function StampPriceTracker() {
 
         e('div', { key: 'stamps-list', className: "stamps-list" },
             filteredStamps.map((stamp) => {
+                if (!stamp) return null;
+
                 const priceRange = stamp.max_price - stamp.min_price;
                 const percentage = priceRange === 0 ? 50 : 
                     ((stamp.latest_price - stamp.min_price) / priceRange) * 100;
@@ -193,18 +217,18 @@ window.StampPriceTracker = function StampPriceTracker() {
                         }, `¥${stamp.latest_price.toLocaleString()}`)
                     ]),
                     e('pre', { 
-                        key: `bar-${stamp.series}-${index}`,
+                        key: `bar-${stamp.unique_key}`,
                         className: "price-bar"
                     }, createProgressBar(percentage)),
                     e('div', { 
-                        key: `range-${stamp.series}-${index}`,
+                        key: `range-${stamp.unique_key}`,
                         className: "price-range"
                     }, [
                         e('span', { 
-                            key: `min-${stamp.series}-${index}`
+                            key: `min-${stamp.unique_key}`
                         }, `¥${stamp.min_price.toLocaleString()}`),
                         e('span', { 
-                            key: `max-${stamp.series}-${index}`
+                            key: `max-${stamp.unique_key}`
                         }, `¥${stamp.max_price.toLocaleString()}`)
                     ])
                 ]);
