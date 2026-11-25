@@ -26,7 +26,8 @@ logger = logging.getLogger("dual_source_stamp_scraper")
 BASE_DIR = Path(__file__).resolve().parent
 DATA_ENC_PATH = BASE_DIR / "docs" / "data.enc"
 
-CNGOLD_LIST_URLS = [
+# 資料源 A（金投收藏網：郵票交易報價 lm3790 含特種/文革/J/T/年冊，lm2992 含生肖）
+CNGOLD_URLS = [
     "https://m.cngold.org/cang/lm3790/",
     "https://m.cngold.org/cang/lm2992/",
 ]
@@ -53,10 +54,28 @@ PRICE_FIELDS = (
     "site_b_used",
 )
 
-# 強制歸類為「其他」的專區頁面關鍵字（不可被內部的 J/T 編號覆寫分類）
-FORCE_OTHER_KEYWORDS = ("小型张", "小本票", "普航欠改")
+# JT 時期小本票 (SB1~SB18) 對應原套票志號與分類，讓同套郵票不同體裁可聚在 J / T 分類比對
+SB_TO_JT_MAP: Dict[str, Tuple[str, str]] = {
+    "SB1": ("T", "T51"),
+    "SB2": ("T", "T57"),
+    "SB3": ("T", "T58"),
+    "SB4": ("T", "T60"),
+    "SB5": ("J", "J63"),
+    "SB6": ("T", "T73"),
+    "SB7": ("T", "T70"),
+    "SB8": ("T", "T80"),
+    "SB9": ("T", "T88"),
+    "SB10": ("T", "T83"),
+    "SB11": ("T", "T90"),
+    "SB12": ("T", "T102"),
+    "SB13": ("T", "T107"),
+    "SB14": ("T", "T112"),
+    "SB15": ("T", "T124"),
+    "SB16": ("T", "T133"),
+    "SB17": ("T", "T146"),
+    "SB18": ("T", "T159"),
+}
 
-# 分類正則規則（依精確度排序）
 CATEGORY_PATTERNS: List[Tuple[str, re.Pattern]] = [
     ("文", re.compile(r"文革|全国山河一片红|黑题词|全面胜利万岁|(?:^|[\s\d.])文\s*(?:\d{1,2}(?:-\d{1,2})?|[一二三四五六七八九十]{1,3})")),
     ("特", re.compile(r"特种邮票|特字|(?:^|\s)特\s*\d+")),
@@ -121,7 +140,7 @@ def decrypt_json_payload(raw_text: str, password: str) -> Dict[str, Any]:
 
 
 # ==========================================
-# 實體去重與名稱／志號正規化 (Entity Reconciliation)
+# 志號、分類與體裁解析 (parse_catalog_and_category)
 # ==========================================
 
 def _nfkc(text: str) -> str:
@@ -129,7 +148,6 @@ def _nfkc(text: str) -> str:
 
 
 def _cn_wen_to_digit(cn_str: str) -> str:
-    """將「文一」~「文十九」轉換為「文1」~「文19」。"""
     if cn_str.isdigit():
         return str(int(cn_str))
     if cn_str == "十":
@@ -141,14 +159,9 @@ def _cn_wen_to_digit(cn_str: str) -> str:
     return cn_str
 
 
-def _is_other_special_item(text: str) -> bool:
-    """判斷是否屬於小型張、小本票、普航欠改等應固定歸於「其他」之品項。"""
-    return bool(re.search(r"小型张|小全张|小本票|普/R|欠资|军邮|改值|航空|SB\d+", text, re.IGNORECASE))
-
-
-def _detect_category(text: str) -> str:
+def _detect_page_category(text: str) -> str:
     cleaned = _nfkc(text)
-    if any(k in cleaned for k in FORCE_OTHER_KEYWORDS):
+    if any(k in cleaned for k in ("小型张", "小本票", "普航欠改")):
         return "其他"
     for category, pattern in CATEGORY_PATTERNS:
         if pattern.search(cleaned):
@@ -182,11 +195,7 @@ def _extract_variant_tag(name: str) -> str:
     return "+".join(tags)
 
 
-def _normalize_code_and_name(category: str, raw_code: str, raw_name: str) -> Tuple[str, str]:
-    """
-    統一雙資料源的志號與名稱：
-    - 支援拆解「文1语录」「文 1 战无不胜」「文一金边」「SB1咕咚」「普/R1...」「P1...」等內嵌志號。
-    """
+def _normalize_raw_code_and_name(raw_code: str, raw_name: str) -> Tuple[str, str]:
     code = re.sub(r"\s+", "", _nfkc(raw_code))
     name = re.sub(r"\s+", " ", _nfkc(raw_name))
 
@@ -197,9 +206,11 @@ def _normalize_code_and_name(category: str, raw_code: str, raw_name: str) -> Tup
             r"文[一二三四五六七八九十]{1,3}|"
             r"特\s*\d+|"
             r"[纪紀]\s*\d+|"
-            r"J\s*\d+|"
-            r"T\s*\d+|"
+            r"J\s*\d+M?|"
+            r"T\s*\d+M?|"
             r"SB\s*\d+|"
+            r"C\s*\d+M?|"
+            r"S\s*\d+M?|"
             r"普/R\d+[A-Za-z甲乙]?|"
             r"R\d+(?:/普)?|"
             r"P\d+"
@@ -213,21 +224,13 @@ def _normalize_code_and_name(category: str, raw_code: str, raw_name: str) -> Tup
             name = rest if rest else code
 
     if code:
-        # 轉換「文一」->「文1」
         m_wen_cn = re.match(r"^文([一二三四五六七八九十]{1,3})$", code)
         if m_wen_cn:
             code = f"文{_cn_wen_to_digit(m_wen_cn.group(1))}"
-
         code = re.sub(r"^纪", "紀", code)
-        if re.match(r"^(?:j|t|sb|c|s|p|r)\d+", code, re.IGNORECASE):
-            m_alpha = re.match(r"^([a-zA-Z]+)(.*)$", code)
-            if m_alpha:
-                code = m_alpha.group(1).upper() + m_alpha.group(2)
-
-        if category in {"特", "紀", "J", "T"} and not re.match(r"^[特紀JT]", code):
-            code = f"{category}{code}"
-        if category == "文" and re.match(r"^\d+", code):
-            code = f"文{code}"
+        m_alpha = re.match(r"^([a-zA-Z]+)(.*)$", code)
+        if m_alpha:
+            code = m_alpha.group(1).upper() + m_alpha.group(2)
 
     return code, name
 
@@ -249,8 +252,69 @@ def _build_canonical_id(category: str, code: str, name: str) -> str:
     return f"{category}::{clean}"
 
 
+def parse_catalog_and_category(
+    raw_code: str,
+    raw_name: str,
+    page_category: str,
+    special_type: str = "",
+) -> Tuple[str, str, str, str]:
+    """
+    核心志號與分類解析器：
+    1. 屬於 J / T 系列的小型張（如 J25、T28）與小本票（SB1~SB18）統一歸類回 J 與 T。
+    2. 非 JT 系列的小型張（如 C33、S61）、編年小本票（SB19+）與普航欠改維持「其他」。
+    3. 確保「文」系列志號與分類正確解析，回傳 (canon_id, category, code, name)。
+    """
+    code, name = _normalize_raw_code_and_name(raw_code, raw_name)
+    row_cat = page_category
+
+    # 先檢查是否為 JT 系列小型張 / 小本票
+    if special_type == "小型张" or "小型张" in name or "小全张" in name:
+        m_jt = re.match(r"^([JT]\d+)M?$", code, re.IGNORECASE)
+        if m_jt:
+            code = m_jt.group(1).upper()
+            row_cat = code[0]
+        else:
+            row_cat = "其他"
+        if "小型张" not in name and "小全张" not in name:
+            name = f"{name}（小型张）"
+
+    elif special_type == "小本票" or "小本票" in name or re.match(r"^SB\d+$", code, re.IGNORECASE):
+        sb_upper = code.upper()
+        if sb_upper in SB_TO_JT_MAP:
+            jt_cat, jt_code = SB_TO_JT_MAP[sb_upper]
+            row_cat = jt_cat
+            code = jt_code
+            if sb_upper not in name:
+                name = f"{name}（{sb_upper} 小本票）" if "小本票" not in name else f"{name}（{sb_upper}）"
+            elif "小本票" not in name:
+                name = f"{name}（小本票）"
+        else:
+            row_cat = "其他"
+            if "小本票" not in name:
+                name = f"{name}（小本票）"
+
+    elif special_type == "普航欠改":
+        row_cat = "其他"
+
+    else:
+        if row_cat == "其他":
+            row_cat = _detect_page_category(f"{code} {name}")
+
+        if row_cat in {"特", "紀", "J", "T"} and code and not re.match(r"^[特紀JT]", code):
+            code = f"{row_cat}{code}"
+        elif row_cat == "文" and code and re.match(r"^\d+", code):
+            code = f"文{code}"
+
+    canon_id = _build_canonical_id(row_cat, code, name)
+    return canon_id, row_cat, code, name
+
+
 def _migrate_existing_store(store: Dict[str, Any]) -> None:
-    """自動修復與正規化舊資料（含文1、文2補歸類與保留小型張/小本票/普航欠改於其他分類）。"""
+    """
+    自動遷移舊版資料：
+    - 重新套用 parse_catalog_and_category，把已存在的 JT 小型張／小本票歸類回 J / T。
+    - 清除先前誤抓的歷史背景年份（< 2020 年，例如 1949-10-08）髒日期紀錄。
+    """
     old_stamps = store.get("stamps", {})
     migrated: Dict[str, Any] = {}
 
@@ -260,29 +324,29 @@ def _migrate_existing_store(store: Dict[str, Any]) -> None:
         raw_code = entry.get("code", "")
         raw_name = entry.get("name", "")
 
-        if raw_cat == "其他" and not _is_other_special_item(f"{raw_code} {raw_name}"):
-            cat = _detect_category(f"{raw_code} {raw_name}")
-        else:
-            cat = raw_cat
+        special_type = ""
+        if "小型张" in raw_name or "小全张" in raw_name:
+            special_type = "小型张"
+        elif "小本票" in raw_name or re.match(r"^SB\d+$", raw_code, re.IGNORECASE):
+            special_type = "小本票"
+        elif re.search(r"普/R|欠资|军邮|改值|航空", f"{raw_code} {raw_name}"):
+            special_type = "普航欠改"
 
-        code, name = _normalize_code_and_name(cat, raw_code, raw_name)
-        if cat == "其他" and not _is_other_special_item(f"{code} {name}"):
-            cat = _detect_category(f"{code} {name}")
-            code, name = _normalize_code_and_name(cat, code, name)
-
-        canon_id = _build_canonical_id(cat, code, name)
+        canon_id, cat, code, name = parse_catalog_and_category(
+            raw_code, raw_name, raw_cat, special_type=special_type
+        )
 
         converted_hist: List[Dict[str, Any]] = []
         for h in entry.get("history", []):
+            dt = str(h.get("date", ""))
+            # 過濾早期誤抓内文背景年份（如 1949-10-08）之無效日期
+            if not dt or dt < "2020-01-01":
+                continue
             if "site_a_mint" in h or "site_b_mint" in h:
-                point = {
-                    "date": h.get("date", ""),
-                    "ts": h.get("ts", ""),
-                    **{f: h.get(f) for f in PRICE_FIELDS},
-                }
+                point = {"date": dt, "ts": h.get("ts", ""), **{f: h.get(f) for f in PRICE_FIELDS}}
             else:
                 point = {
-                    "date": h.get("date", ""),
+                    "date": dt,
                     "ts": h.get("ts", ""),
                     "site_a_mint": h.get("mint"),
                     "site_a_cto": h.get("cto"),
@@ -292,6 +356,9 @@ def _migrate_existing_store(store: Dict[str, Any]) -> None:
                     "site_b_used": None,
                 }
             converted_hist.append(point)
+
+        if not converted_hist:
+            continue
 
         if canon_id in migrated:
             by_date = {p["date"]: p for p in migrated[canon_id]["history"]}
@@ -335,7 +402,7 @@ def load_existing_store(password: str) -> Dict[str, Any]:
 
 
 # ==========================================
-# 共用 HTTP 與表格解析引擎
+# 共用 HTTP 與日期 / 表格解析引擎
 # ==========================================
 
 def _polite_sleep() -> None:
@@ -360,13 +427,43 @@ def _fetch_html(session: requests.Session, url: str, referer: str = "") -> Optio
         return None
 
 
-def _extract_record_date(text: str) -> str:
-    m1 = re.search(r"(\d{4})年(\d{1,2})月(\d{1,2})日", text)
-    if m1:
-        return f"{int(m1.group(1)):04d}-{int(m1.group(2)):02d}-{int(m1.group(3)):02d}"
-    m2 = re.search(r"(?:发布时间|更新时间)[：:\s]*(\d{4})-(\d{1,2})-(\d{1,2})", text)
-    if m2:
-        return f"{int(m2.group(1)):04d}-{int(m2.group(2)):02d}-{int(m2.group(3)):02d}"
+def _extract_publish_date(soup: BeautifulSoup, title_text: str) -> str:
+    """
+    精準擷取「更新日」，嚴禁誤抓內文歷史背景年份（如 1949 年）：
+    1. 優先搜尋頁面明確的「发布时间：YYYY-MM-DD / YYYY-M-D」或「更新时间：...」。
+    2. 其次檢查文章標題中的（YYYY年M月D日）且年份須 >= 2020。
+    3. 皆無則使用當日日期。
+    """
+    # 先檢查常見發布時間標籤或全文前段明確欄位
+    page_text = _nfkc(soup.get_text(" ", strip=True))
+    m_pub = re.search(
+        r"(?:发布时间|更新时间|发布日期)\s*[：:]\s*(\d{4})\s*[-/年]\s*(\d{1,2})\s*[-/月]\s*(\d{1,2})\s*日?",
+        page_text,
+    )
+    if m_pub:
+        y, m, d = int(m_pub.group(1)), int(m_pub.group(2)), int(m_pub.group(3))
+        if 2020 <= y <= 2100 and 1 <= m <= 12 and 1 <= d <= 31:
+            return f"{y:04d}-{m:02d}-{d:02d}"
+
+    # 檢查 HTML meta 發布時間
+    for meta in soup.find_all("meta"):
+        prop = (meta.get("property") or meta.get("name") or "").lower()
+        if prop in ("article:published_time", "og:release_date", "pubdate", "publishdate"):
+            content = (meta.get("content") or "").strip()
+            m_meta = re.search(r"(\d{4})-(\d{1,2})-(\d{1,2})", content)
+            if m_meta:
+                y, m, d = int(m_meta.group(1)), int(m_meta.group(2)), int(m_meta.group(3))
+                if 2020 <= y <= 2100:
+                    return f"{y:04d}-{m:02d}-{d:02d}"
+
+    # 僅在標題本身（不含內文介紹）比對 YYYY年M月D日 / YYYY-M-D
+    clean_title = _nfkc(title_text)
+    m_title = re.search(r"(\d{4})\s*[年\-/]\s*(\d{1,2})\s*[月\-/]\s*(\d{1,2})\s*日?", clean_title)
+    if m_title:
+        y, m, d = int(m_title.group(1)), int(m_title.group(2)), int(m_title.group(3))
+        if 2020 <= y <= 2100 and 1 <= m <= 12 and 1 <= d <= 31:
+            return f"{y:04d}-{m:02d}-{d:02d}"
+
     return datetime.now().strftime("%Y-%m-%d")
 
 
@@ -390,7 +487,6 @@ def _parse_price(raw_text: str) -> Optional[float]:
 
 def _classify_header(col_text: str) -> str:
     h = re.sub(r"\s+", "", _nfkc(col_text))
-    # 必須優先排除「邮票类别」「发行量」「发行日期」「序号」等非價格與非名稱欄
     if any(k in h for k in ("类别", "发行量", "发行日期", "备注")) or h == "序号":
         return "ignore"
     if "编号" in h or "志号" in h:
@@ -425,9 +521,6 @@ def _find_header_row(rows: List[Tag]) -> Tuple[int, List[str]]:
 
 
 def _split_column_groups(roles: List[str]) -> List[Tuple[int, List[str]]]:
-    """
-    智能切分單表與多欄並排表格（支援 6 欄 J/T 表、8 欄老紀特表、6 欄小本票表等）。
-    """
     col_count = len(roles)
     anchor_role = "code" if roles.count("code") >= 2 else ("name" if roles.count("name") >= 2 else None)
     if anchor_role:
@@ -445,8 +538,7 @@ def _parse_table(
     site_key: str,
     page_category: str,
     record_date: str,
-    force_category_other: bool = False,
-    tag_suffix: str = "",
+    special_type: str = "",
 ) -> List[Dict[str, Any]]:
     rows = table.find_all("tr")
     if len(rows) < 2:
@@ -495,31 +587,21 @@ def _parse_table(
                 mint_price = mint_alt_price
 
             clean_check = re.sub(r"\s+", "", _nfkc(raw_name))
-            if not clean_check or clean_check in ("名称", "邮票名称", "编号", "品种", "名称（老本）", "名称（新本）"):
+            if not clean_check or clean_check in ("名称", "邮票名称", "编号", "品种", "名称(老本)", "名称(新本)"):
                 continue
             if mint_price is None and cto_price is None and used_price is None:
                 continue
 
-            if force_category_other:
-                row_cat = "其他"
-            else:
-                row_cat = page_category if page_category != "其他" else _detect_category(f"{raw_code} {raw_name}")
-
-            code, name = _normalize_code_and_name(row_cat, raw_code, raw_name)
+            canon_id, row_cat, code, name = parse_catalog_and_category(
+                raw_code, raw_name, page_category, special_type=special_type
+            )
             if not name:
                 continue
-
-            if not force_category_other and row_cat == "其他":
-                row_cat = _detect_category(f"{code} {name}")
-                code, name = _normalize_code_and_name(row_cat, code, name)
-
-            if tag_suffix and tag_suffix not in name:
-                name = f"{name}（{tag_suffix}）"
 
             results.append(
                 {
                     "site": site_key,
-                    "id": _build_canonical_id(row_cat, code, name),
+                    "id": canon_id,
                     "code": code,
                     "name": name,
                     "category": row_cat,
@@ -548,11 +630,11 @@ def _extract_cngold_title(soup: BeautifulSoup, fallback: str) -> str:
 
 
 def scrape_site_a(session: requests.Session, per_source_limit: int = 10) -> Tuple[List[Dict[str, Any]], int]:
-    """爬取資料源 A：金投收藏網 lm3790（文革/特種/J字/T字/年冊）與 lm2992（生肖）。"""
+    """爬取資料源 A：金投收藏網 lm3790（含特種/文革/J字/T字/年冊）與 lm2992（生肖）。"""
     seen_urls = set()
     articles: List[Tuple[str, str]] = []
 
-    for idx, list_url in enumerate(CNGOLD_LIST_URLS):
+    for idx, list_url in enumerate(CNGOLD_URLS):
         if idx > 0:
             _polite_sleep()
         html = _fetch_html(session, list_url, referer="https://m.cngold.org/cang/")
@@ -567,7 +649,8 @@ def scrape_site_a(session: requests.Session, per_source_limit: int = 10) -> Tupl
                 parsed = urlparse(full_url)
                 if not parsed.netloc.endswith("cngold.org"):
                     continue
-                if not re.search(r"/cang/(?:xw|jg)\d+\.html$", parsed.path):
+                # 支援 /cang/xw*.html、/cang/jg*.html、/cang/c*.html 等所有行情文章網址
+                if not re.search(r"/cang/[a-z]+\d+\.html$", parsed.path):
                     continue
 
                 title = a_tag.get("title") or a_tag.get_text(" ", strip=True)
@@ -596,14 +679,14 @@ def scrape_site_a(session: requests.Session, per_source_limit: int = 10) -> Tupl
             soup = BeautifulSoup(html, "html.parser")
             article_title = _extract_cngold_title(soup, list_title)
             combined = f"{article_title} {list_title}"
-            category = _detect_category(combined)
-            record_date = _extract_record_date(combined)
+            category = _detect_page_category(combined)
+            record_date = _extract_publish_date(soup, combined)
 
             page_rows: List[Dict[str, Any]] = []
             for tbl in soup.find_all("table"):
                 page_rows.extend(_parse_table(tbl, "site_a", category, record_date))
 
-            logger.info("[Site A] %s -> 分類:[%s] 日期:[%s] %d 筆", article_title[:24], category, record_date, len(page_rows))
+            logger.info("[Site A] %s -> 分類:[%s] 更新日:[%s] %d 筆", article_title[:24], category, record_date, len(page_rows))
             records.extend(page_rows)
             processed += 1
         except Exception as exc:
@@ -619,7 +702,7 @@ def scrape_site_a(session: requests.Session, per_source_limit: int = 10) -> Tupl
 def scrape_site_b(session: requests.Session, max_pages: int = 20) -> Tuple[List[Dict[str, Any]], int]:
     """
     爬取資料源 B：點購收藏網 shougou.html 及其全系列子頁面：
-    紀、特、文、編號、J 字、T 字、生肖、年冊，以及小型張、小本票、普航欠改（歸類於「其他」）。
+    紀念、特種、文革、編號、J 字、T 字、生肖、年冊，以及小型張、小本票、普航欠改。
     """
     index_html = _fetch_html(session, SC5151_INDEX_URL, referer="http://www.5151sc.com/")
     if not index_html:
@@ -673,19 +756,18 @@ def scrape_site_b(session: requests.Session, max_pages: int = 20) -> Tuple[List[
             soup = BeautifulSoup(html, "html.parser")
             h1 = soup.find("h1")
             page_title = h1.get_text(" ", strip=True) if h1 else (soup.title.string.strip() if soup.title and soup.title.string else link_title)
-            body_text = soup.get_text(" ", strip=True)[:1200]
             title_combo = f"{page_title} {link_title}"
 
-            # 判斷是否為「小型張 / 小本票 / 普航欠改」專區 -> 鎖定歸類於「其他」
-            force_other = any(k in title_combo for k in FORCE_OTHER_KEYWORDS)
-            tag_suffix = ""
+            special_type = ""
             if "小型张" in title_combo:
-                tag_suffix = "小型张"
+                special_type = "小型张"
             elif "小本票" in title_combo:
-                tag_suffix = "小本票"
+                special_type = "小本票"
+            elif "普航欠改" in title_combo:
+                special_type = "普航欠改"
 
-            category = "其他" if force_other else _detect_category(title_combo)
-            record_date = _extract_record_date(f"{page_title} {body_text}")
+            category = "其他" if special_type else _detect_page_category(title_combo)
+            record_date = _extract_publish_date(soup, title_combo)
 
             page_rows: List[Dict[str, Any]] = []
             for tbl in soup.find_all("table"):
@@ -695,12 +777,11 @@ def scrape_site_b(session: requests.Session, max_pages: int = 20) -> Tuple[List[
                         site_key="site_b",
                         page_category=category,
                         record_date=record_date,
-                        force_category_other=force_other,
-                        tag_suffix=tag_suffix,
+                        special_type=special_type,
                     )
                 )
 
-            logger.info("[Site B] %s -> 分類:[%s] 日期:[%s] %d 筆", page_title[:24], category, record_date, len(page_rows))
+            logger.info("[Site B] %s -> 分類:[%s] 更新日:[%s] %d 筆", page_title[:24], category, record_date, len(page_rows))
             records.extend(page_rows)
             processed += 1
         except Exception as exc:
