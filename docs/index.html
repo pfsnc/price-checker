@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>中國郵票行情私人追蹤系統</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
+
+  <!-- 密碼鎖定驗證畫面（未解密前不載入與顯示任何郵票資料） -->
+  <section id="lockScreen" class="min-h-screen flex items-center justify-center px-4">
+    <div class="w-full max-w-md bg-white rounded-2xl border border-slate-200 shadow-lg p-7 space-y-5">
+      <div class="text-center space-y-1.5">
+        <div class="mx-auto w-12 h-12 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl font-bold">
+          🔐
+        </div>
+        <h1 class="text-xl font-bold text-slate-900">私人郵票行情資料庫</h1>
+        <p class="text-xs text-slate-500">資料以 AES-256-GCM 加密儲存，請輸入解密密碼</p>
+      </div>
+
+      <form id="unlockForm" class="space-y-4">
+        <div>
+          <label for="passwordInput" class="block text-xs font-medium text-slate-600 mb-1">存取密碼</label>
+          <input id="passwordInput" type="password" required autocomplete="current-password"
+            placeholder="輸入 GitHub Secret 設定之密碼"
+            class="w-full px-3.5 py-2.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+        </div>
+
+        <div id="authError" class="hidden text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-lg p-2.5"></div>
+
+        <button id="unlockBtn" type="submit"
+          class="w-full py-2.5 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-medium transition shadow-sm">
+          解密並載入儀表板
+        </button>
+      </form>
+    </div>
+  </section>
+
+  <!-- 已解密主應用程式畫面 -->
+  <div id="appScreen" class="hidden">
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-20">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h1 class="text-xl font-bold text-slate-900">中國郵票行情追蹤系統</h1>
+          <p class="text-xs text-slate-500 mt-0.5">
+            GitHub Actions 自動排程 · Smart Diff 變動紀錄 ·
+            最後檢查：<span id="headerLastChecked" class="font-medium text-slate-700">-</span>
+          </p>
+        </div>
+        <button id="lockBtn"
+          class="self-start sm:self-auto px-3.5 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-xs font-medium text-slate-700 transition">
+          鎖定並清除快取
+        </button>
+      </div>
+    </header>
+
+    <!-- 列表總覽視圖 -->
+    <main id="dashboardView" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+      <section class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+          <div class="text-xs text-slate-500">追蹤郵票總數</div>
+          <div id="statStamps" class="text-2xl font-bold text-slate-900 mt-1">-</div>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+          <div class="text-xs text-slate-500">價格變動快照筆數</div>
+          <div id="statChanges" class="text-2xl font-bold text-slate-900 mt-1">-</div>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+          <div class="text-xs text-slate-500">最後價格異動時間</div>
+          <div id="statUpdated" class="text-lg font-bold text-indigo-600 mt-1.5">-</div>
+        </div>
+      </section>
+
+      <section class="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div id="categoryTabs" class="flex flex-wrap gap-2"></div>
+          <div class="w-full md:w-72">
+            <input id="searchInput" type="text" placeholder="搜尋名稱或志號（如：猴、T46、文1）"
+              class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          </div>
+        </div>
+      </section>
+
+      <section class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-slate-200 text-sm">
+            <thead class="bg-slate-50 text-slate-600">
+              <tr>
+                <th class="px-4 py-3 text-left font-semibold">志號</th>
+                <th class="px-4 py-3 text-left font-semibold">郵票名稱</th>
+                <th class="px-4 py-3 text-left font-semibold">分類</th>
+                <th class="px-4 py-3 text-right font-semibold text-emerald-700">新票 (元)</th>
+                <th class="px-4 py-3 text-right font-semibold text-amber-700">蓋銷 (元)</th>
+                <th class="px-4 py-3 text-right font-semibold text-rose-700">信銷 (元)</th>
+                <th class="px-4 py-3 text-center font-semibold">異動次數</th>
+                <th class="px-4 py-3 text-center font-semibold">最近異動日</th>
+                <th class="px-4 py-3 text-center font-semibold">操作</th>
+              </tr>
+            </thead>
+            <tbody id="stampTableBody" class="divide-y divide-slate-100 bg-white"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <!-- 單一郵票歷史走勢視圖 -->
+    <main id="detailView" class="hidden max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+          <button id="backBtn" class="text-sm font-medium text-indigo-600 hover:text-indigo-800">&larr; 返回行情總覽</button>
+          <span class="text-slate-300">|</span>
+          <h2 id="detailTitle" class="text-lg sm:text-xl font-bold text-slate-900"></h2>
+          <span id="detailCat" class="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 text-xs font-semibold"></span>
+          <span id="detailCode" class="hidden px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-mono text-xs"></span>
+        </div>
+        <div class="text-xs text-slate-500">
+          最後檢查：<span id="detailChecked">-</span>
+        </div>
+      </div>
+
+      <section class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="bg-white rounded-xl border border-emerald-200 p-4 shadow-sm">
+          <div class="text-xs font-medium text-emerald-700">新票最新價格 (Mint)</div>
+          <div id="latestMint" class="text-2xl font-bold text-emerald-600 mt-1">--</div>
+          <div id="rangeMint" class="text-xs text-slate-500 mt-1">--</div>
+        </div>
+        <div class="bg-white rounded-xl border border-amber-200 p-4 shadow-sm">
+          <div class="text-xs font-medium text-amber-700">蓋銷最新價格 (CTO)</div>
+          <div id="latestCto" class="text-2xl font-bold text-amber-600 mt-1">--</div>
+          <div id="rangeCto" class="text-xs text-slate-500 mt-1">--</div>
+        </div>
+        <div class="bg-white rounded-xl border border-rose-200 p-4 shadow-sm">
+          <div class="text-xs font-medium text-rose-700">信銷最新價格 (Used)</div>
+          <div id="latestUsed" class="text-2xl font-bold text-rose-600 mt-1">--</div>
+          <div id="rangeUsed" class="text-xs text-slate-500 mt-1">--</div>
+        </div>
+      </section>
+
+      <section class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+          <h3 class="text-base font-semibold text-slate-900">價格變動歷史折線圖（元）</h3>
+          <div id="rangeButtons" class="flex gap-2">
+            <button data-limit="10" class="range-btn px-3 py-1 rounded text-xs font-medium bg-slate-100 text-slate-700 hover:bg-slate-200">近 10 筆</button>
+            <button data-limit="30" class="range-btn px-3 py-1 rounded text-xs font-medium bg-slate-100 text-slate-700 hover:bg-slate-200">近 30 筆</button>
+            <button data-limit="0" class="range-btn px-3 py-1 rounded text-xs font-medium bg-indigo-600 text-white">全部紀錄</button>
+          </div>
+        </div>
+        <div class="relative h-80">
+          <canvas id="priceChart"></canvas>
+        </div>
+      </section>
+
+      <section class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="px-5 py-3 border-b border-slate-200 bg-slate-50 font-semibold text-sm text-slate-700">
+          價格異動快照明細
+        </div>
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-slate-200 text-sm">
+            <thead class="bg-white text-slate-500">
+              <tr>
+                <th class="px-4 py-2.5 text-left font-medium">報價日期</th>
+                <th class="px-4 py-2.5 text-right font-medium text-emerald-700">新票 (元)</th>
+                <th class="px-4 py-2.5 text-right font-medium text-amber-700">蓋銷 (元)</th>
+                <th class="px-4 py-2.5 text-right font-medium text-rose-700">信銷 (元)</th>
+                <th class="px-4 py-2.5 text-right font-medium">紀錄時間戳</th>
+              </tr>
+            </thead>
+            <tbody id="historyTableBody" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const CATEGORIES = ["全部", "特", "纪", "文", "J", "T", "生肖", "年册", "其他"];
+    let storeData = null;
+    let stampList = [];
+    let currentCategory = "全部";
+    let activeStamp = null;
+    let chartInstance = null;
+
+    function b64ToBytes(b64) {
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return bytes;
+    }
+
+    async function decryptDataEnc(envelope, password) {
+      const enc = new TextEncoder();
+      const keyMaterial = await crypto.subtle.importKey(
+        "raw",
+        enc.encode(password),
+        "PBKDF2",
+        false,
+        ["deriveKey"]
+      );
+      const aesKey = await crypto.subtle.deriveKey(
+        {
+          name: "PBKDF2",
+          salt: b64ToBytes(envelope.salt),
+          iterations: Number(envelope.iter || 100000),
+          hash: "SHA-256",
+        },
+        keyMaterial,
+        { name: "AES-GCM", length: 256 },
+        false,
+        ["decrypt"]
+      );
+      const plainBuffer = await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv: b64ToBytes(envelope.iv) },
+        aesKey,
+        b64ToBytes(envelope.ct)
+      );
+      return JSON.parse(new TextDecoder().decode(plainBuffer));
+    }
+
+    function escapeHtml(str) {
+      return String(str ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function fmtPrice(val) {
+      if (val === null || val === undefined) return '<span class="text-slate-300">--</span>';
+      return Number(val).toLocaleString("zh-TW", { maximumFractionDigits: 2 });
+    }
+
+    function fmtPriceUnit(val) {
+      return val === null || val === undefined
+        ? "--"
+        : Number(val).toLocaleString("zh-TW", { maximumFractionDigits: 2 }) + " 元";
+    }
+
+    function renderCategoryTabs() {
+      const container = document.getElementById("categoryTabs");
+      container.innerHTML = CATEGORIES.map(cat => {
+        const active = cat === currentCategory;
+        const cls = active
+          ? "bg-indigo-600 text-white"
+          : "bg-slate-100 text-slate-700 hover:bg-slate-200";
+        return `<button data-cat="${escapeHtml(cat)}" class="cat-btn px-3 py-1.5 rounded-full text-xs font-medium ${cls}">${escapeHtml(cat)}</button>`;
+      }).join("");
+
+      container.querySelectorAll(".cat-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          currentCategory = btn.dataset.cat;
+          renderCategoryTabs();
+          renderTable();
+        });
+      });
+    }
+
+    function renderDashboardSummary() {
+      const totalChanges = stampList.reduce((acc, s) => acc + (s.history?.length || 0), 0);
+      document.getElementById("statStamps").textContent = stampList.length;
+      document.getElementById("statChanges").textContent = totalChanges;
+      document.getElementById("statUpdated").textContent = storeData.updated_at || "-";
+      document.getElementById("headerLastChecked").textContent = storeData.last_checked || "-";
+    }
+
+    function renderTable() {
+      const kw = document.getElementById("searchInput").value.trim().toLowerCase();
+      const filtered = stampList.filter(item => {
+        if (currentCategory !== "全部" && item.category !== currentCategory) return false;
+        if (kw) {
+          const hay = `${item.name} ${item.code}`.toLowerCase();
+          if (!hay.includes(kw)) return false;
+        }
+        return true;
+      });
+
+      const tbody = document.getElementById("stampTableBody");
+      if (!filtered.length) {
+        tbody.innerHTML = `<tr><td colspan="9" class="px-4 py-10 text-center text-slate-400">查無符合條件的郵票資料</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(item => {
+        const latest = item.history?.[item.history.length - 1] || {};
+        return `
+          <tr class="hover:bg-slate-50 transition">
+            <td class="px-4 py-3 font-mono text-xs text-slate-500">${escapeHtml(item.code || "-")}</td>
+            <td class="px-4 py-3 font-medium text-slate-900">
+              <button data-id="${escapeHtml(item.id)}" class="open-detail text-left hover:text-indigo-600 hover:underline">
+                ${escapeHtml(item.name)}
+              </button>
+            </td>
+            <td class="px-4 py-3">
+              <span class="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-xs font-medium">${escapeHtml(item.category)}</span>
+            </td>
+            <td class="px-4 py-3 text-right font-semibold text-emerald-600">${fmtPrice(latest.mint)}</td>
+            <td class="px-4 py-3 text-right font-semibold text-amber-600">${fmtPrice(latest.cto)}</td>
+            <td class="px-4 py-3 text-right font-semibold text-rose-600">${fmtPrice(latest.used)}</td>
+            <td class="px-4 py-3 text-center text-xs text-slate-600">${item.history?.length || 0}</td>
+            <td class="px-4 py-3 text-center text-xs text-slate-500">${escapeHtml(latest.date || "-")}</td>
+            <td class="px-4 py-3 text-center">
+              <button data-id="${escapeHtml(item.id)}" class="open-detail text-xs font-medium text-indigo-600 hover:text-indigo-800">走勢圖 &rarr;</button>
+            </td>
+          </tr>
+        `;
+      }).join("");
+
+      tbody.querySelectorAll(".open-detail").forEach(btn => {
+        btn.addEventListener("click", () => openDetail(btn.dataset.id));
+      });
+    }
+
+    function openDetail(stampId) {
+      const stamp = storeData?.stamps?.[stampId];
+      if (!stamp) return;
+      activeStamp = stamp;
+
+      document.getElementById("dashboardView").classList.add("hidden");
+      document.getElementById("detailView").classList.remove("hidden");
+
+      document.getElementById("detailTitle").textContent = stamp.name;
+      document.getElementById("detailCat").textContent = stamp.category;
+      document.getElementById("detailChecked").textContent = stamp.last_checked || "-";
+
+      const codeEl = document.getElementById("detailCode");
+      if (stamp.code) {
+        codeEl.textContent = stamp.code;
+        codeEl.classList.remove("hidden");
+      } else {
+        codeEl.classList.add("hidden");
+      }
+
+      const history = stamp.history || [];
+      const last = history[history.length - 1] || {};
+      document.getElementById("latestMint").textContent = fmtPriceUnit(last.mint);
+      document.getElementById("latestCto").textContent = fmtPriceUnit(last.cto);
+      document.getElementById("latestUsed").textContent = fmtPriceUnit(last.used);
+
+      const calcRange = (key) => {
+        const vals = history.map(h => h[key]).filter(v => v !== null && v !== undefined);
+        if (!vals.length) return "歷史區間：尚無紀錄";
+        return `歷史最低 ${Math.min(...vals)} 元 · 最高 ${Math.max(...vals)} 元`;
+      };
+      document.getElementById("rangeMint").textContent = calcRange("mint");
+      document.getElementById("rangeCto").textContent = calcRange("cto");
+      document.getElementById("rangeUsed").textContent = calcRange("used");
+
+      renderDetailChart(0);
+      renderDetailTable(history);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    function renderDetailChart(limit) {
+      if (!activeStamp) return;
+      const history = activeStamp.history || [];
+      const slice = limit > 0 && history.length > limit ? history.slice(-limit) : history;
+
+      if (chartInstance) chartInstance.destroy();
+      const ctx = document.getElementById("priceChart").getContext("2d");
+
+      chartInstance = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: slice.map(d => d.date),
+          datasets: [
+            {
+              label: "新票價格",
+              data: slice.map(d => d.mint),
+              borderColor: "#10b981",
+              backgroundColor: "rgba(16, 185, 129, 0.12)",
+              borderWidth: 2.5,
+              tension: 0.2,
+              spanGaps: true,
+              pointRadius: 4,
+              pointHoverRadius: 6,
+            },
+            {
+              label: "蓋銷價格",
+              data: slice.map(d => d.cto),
+              borderColor: "#f59e0b",
+              backgroundColor: "rgba(245, 158, 11, 0.12)",
+              borderWidth: 2.5,
+              tension: 0.2,
+              spanGaps: true,
+              pointRadius: 4,
+              pointHoverRadius: 6,
+            },
+            {
+              label: "信銷價格",
+              data: slice.map(d => d.used),
+              borderColor: "#f43f5e",
+              backgroundColor: "rgba(244, 63, 94, 0.12)",
+              borderWidth: 2.5,
+              tension: 0.2,
+              spanGaps: true,
+              pointRadius: 4,
+              pointHoverRadius: 6,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: "index", intersect: false },
+          plugins: {
+            legend: { position: "top" },
+            tooltip: {
+              callbacks: {
+                afterTitle: (items) => {
+                  const idx = items[0]?.dataIndex;
+                  return idx !== undefined && slice[idx]?.ts ? `紀錄時間：${slice[idx].ts}` : "";
+                },
+                label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y !== null ? ctx.parsed.y + " 元" : "--"}`,
+              },
+            },
+          },
+          scales: {
+            y: {
+              beginAtZero: false,
+              ticks: { callback: (val) => val + " 元" },
+            },
+          },
+        },
+      });
+    }
+
+    function renderDetailTable(history) {
+      const tbody = document.getElementById("historyTableBody");
+      const reversed = [...history].reverse();
+      tbody.innerHTML = reversed.map(row => `
+        <tr class="hover:bg-slate-50">
+          <td class="px-4 py-2.5 text-slate-700">${escapeHtml(row.date)}</td>
+          <td class="px-4 py-2.5 text-right font-medium text-emerald-600">${fmtPrice(row.mint)}</td>
+          <td class="px-4 py-2.5 text-right font-medium text-amber-600">${fmtPrice(row.cto)}</td>
+          <td class="px-4 py-2.5 text-right font-medium text-rose-600">${fmtPrice(row.used)}</td>
+          <td class="px-4 py-2.5 text-right text-xs text-slate-400">${escapeHtml(row.ts || "-")}</td>
+        </tr>
+      `).join("");
+    }
+
+    document.getElementById("unlockForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const pwInput = document.getElementById("passwordInput");
+      const errBox = document.getElementById("authError");
+      const btn = document.getElementById("unlockBtn");
+      const password = pwInput.value;
+
+      errBox.classList.add("hidden");
+      btn.disabled = true;
+      btn.textContent = "正在下載並解密資料...";
+
+      try {
+        const res = await fetch(`./data.enc?t=${Date.now()}`, { cache: "no-store" });
+        if (!res.ok) throw new Error(`無法載入加密資料檔 (HTTP ${res.status})`);
+        const envelope = await res.json();
+
+        storeData = await decryptDataEnc(envelope, password);
+        stampList = Object.values(storeData.stamps || {}).sort((a, b) => {
+          const da = a.history?.[a.history.length - 1]?.date || "";
+          const db = b.history?.[b.history.length - 1]?.date || "";
+          return db.localeCompare(da) || a.category.localeCompare(b.category) || a.name.localeCompare(b.name);
+        });
+
+        pwInput.value = "";
+        document.getElementById("lockScreen").classList.add("hidden");
+        document.getElementById("appScreen").classList.remove("hidden");
+
+        renderCategoryTabs();
+        renderDashboardSummary();
+        renderTable();
+      } catch (err) {
+        errBox.textContent = err.message.includes("HTTP")
+          ? err.message
+          : "密碼錯誤或資料無法解密，請重新確認。";
+        errBox.classList.remove("hidden");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "解密並載入儀表板";
+      }
+    });
+
+    document.getElementById("searchInput").addEventListener("input", renderTable);
+
+    document.getElementById("backBtn").addEventListener("click", () => {
+      document.getElementById("detailView").classList.add("hidden");
+      document.getElementById("dashboardView").classList.remove("hidden");
+      activeStamp = null;
+    });
+
+    document.querySelectorAll(".range-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".range-btn").forEach(b => {
+          b.className = "range-btn px-3 py-1 rounded text-xs font-medium bg-slate-100 text-slate-700 hover:bg-slate-200";
+        });
+        btn.className = "range-btn px-3 py-1 rounded text-xs font-medium bg-indigo-600 text-white";
+        renderDetailChart(Number(btn.dataset.limit));
+      });
+    });
+
+    document.getElementById("lockBtn").addEventListener("click", () => {
+      storeData = null;
+      stampList = [];
+      activeStamp = null;
+      if (chartInstance) {
+        chartInstance.destroy();
+        chartInstance = null;
+      }
+      document.getElementById("appScreen").classList.add("hidden");
+      document.getElementById("detailView").classList.add("hidden");
+      document.getElementById("dashboardView").classList.remove("hidden");
+      document.getElementById("lockScreen").classList.remove("hidden");
+    });
+  </script>
+</body>
+</html>
