@@ -43,11 +43,22 @@ HEADERS = {
 
 REQUEST_TIMEOUT = 15
 PBKDF2_ITERATIONS = 100_000
+PER_SOURCE_ARTICLE_LIMIT = 10
+
+# 分類正則規則（依精確度排序）
+CATEGORY_PATTERNS: List[Tuple[str, re.Pattern]] = [
+    ("文", re.compile(r"文革|^文\s*\d+")),
+    ("特", re.compile(r"特种邮票|特字|^特\s*\d+")),
+    ("紀", re.compile(r"纪念邮票|老纪特|纪字|紀字|^[纪紀]\s*\d+")),
+    ("J", re.compile(r"J字|(?<![A-Za-z])J(?:\s*字|\d+)", re.IGNORECASE)),
+    ("T", re.compile(r"T字|(?<![A-Za-z])T(?:\s*字|\d+)", re.IGNORECASE)),
+    ("生肖", re.compile(r"生肖|[一二三四]轮.*(?:大版|猴|鸡|狗|猪|鼠|牛|虎|兔|龙|蛇|马|羊)")),
+    ("年冊", re.compile(r"年册|年冊")),
+]
 
 
 # ==========================================
 # 加密 / 解密模組 (PBKDF2-SHA256 + AES-256-GCM)
-# 與瀏覽器 Web Crypto API 完全相容
 # ==========================================
 
 def _derive_aes_key(password: str, salt: bytes, iterations: int) -> bytes:
@@ -61,7 +72,7 @@ def _derive_aes_key(password: str, salt: bytes, iterations: int) -> bytes:
 
 
 def encrypt_json_payload(data: Dict[str, Any], password: str) -> str:
-    """將資料序列化為 JSON 並以 AES-256-GCM 加密輸出為 JSON 信封字串。"""
+    """將資料序列化為 JSON 並以 AES-256-GCM 加密輸出。"""
     salt = os.urandom(16)
     iv = os.urandom(12)
     key = _derive_aes_key(password, salt, PBKDF2_ITERATIONS)
@@ -81,7 +92,6 @@ def encrypt_json_payload(data: Dict[str, Any], password: str) -> str:
 
 
 def decrypt_json_payload(raw_text: str, password: str) -> Dict[str, Any]:
-    """讀取並解密現有的 docs/data.enc。"""
     envelope = json.loads(raw_text)
     salt = base64.b64decode(envelope["salt"])
     iv = base64.b64decode(envelope["iv"])
@@ -93,8 +103,41 @@ def decrypt_json_payload(raw_text: str, password: str) -> Dict[str, Any]:
     return json.loads(plaintext.decode("utf-8"))
 
 
+def _migrate_legacy_categories(store: Dict[str, Any]) -> None:
+    """自動修復先前誤歸類為「其他」的舊紀錄，避免歷史資料殘留錯誤標籤。"""
+    old_stamps = store.get("stamps", {})
+    migrated: Dict[str, Any] = {}
+
+    for key, entry in old_stamps.items():
+        cat = entry.get("category", "其他")
+        code = entry.get("code", "")
+        name = entry.get("name", "")
+        if cat == "其他":
+            fixed_cat = _detect_category(f"{code} {name}")
+            if fixed_cat != "其他":
+                cat = fixed_cat
+                entry["category"] = fixed_cat
+
+        new_key = f"{cat}::{code}::{name}"
+        entry["id"] = new_key
+        if new_key in migrated:
+            # 合併歷史紀錄並依日期排序去重
+            existing_hist = {
+                (h.get("date"), h.get("mint"), h.get("cto"), h.get("used")): h
+                for h in migrated[new_key].get("history", [])
+            }
+            for h in entry.get("history", []):
+                existing_hist[(h.get("date"), h.get("mint"), h.get("cto"), h.get("used"))] = h
+            migrated[new_key]["history"] = sorted(
+                existing_hist.values(), key=lambda x: (x.get("date", ""), x.get("ts", ""))
+            )
+        else:
+            migrated[new_key] = entry
+
+    store["stamps"] = migrated
+
+
 def load_existing_store(password: str) -> Dict[str, Any]:
-    """載入現有歷史資料；若檔案不存在則建立空資料結構。"""
     if not DATA_ENC_PATH.exists():
         logger.info("找不到現有 %s，將建立全新資料集。", DATA_ENC_PATH)
         return {"updated_at": "", "last_checked": "", "stamps": {}}
@@ -104,6 +147,7 @@ def load_existing_store(password: str) -> Dict[str, Any]:
         store = decrypt_json_payload(raw, password)
         if not isinstance(store, dict) or "stamps" not in store:
             raise ValueError("資料格式不符")
+        _migrate_legacy_categories(store)
         return store
     except Exception as exc:
         raise RuntimeError(
@@ -132,26 +176,35 @@ def _fetch_html(session: requests.Session, url: str) -> Optional[str]:
         return None
 
 
-def _detect_category(title: str) -> str:
-    if "文革" in title:
-        return "文"
-    if "特种" in title:
-        return "特"
-    if "纪念" in title:
-        return "纪"
-    if "J字" in title or re.search(r"\bJ\b", title):
-        return "J"
-    if "T字" in title or re.search(r"\bT\b", title):
-        return "T"
-    if "生肖" in title:
-        return "生肖"
-    if "年册" in title:
-        return "年册"
+def _extract_article_title(soup: BeautifulSoup, fallback: str) -> str:
+    """
+    正確擷取文章主標題，排除網站導覽列 Logo 的 <h1>（如「金投网-手机版」）。
+    """
+    for h1 in soup.find_all("h1"):
+        txt = h1.get_text(" ", strip=True)
+        if txt and "金投网" not in txt and len(txt) > 6:
+            return txt
+
+    if soup.title and soup.title.string:
+        title_txt = soup.title.string.strip()
+        if title_txt and "金投网" not in title_txt[:8]:
+            return title_txt
+        return title_txt
+
+    return fallback
+
+
+def _detect_category(text: str) -> str:
+    """使用正則表達式識別郵票分類：特、紀、文、J、T、生肖、年冊。"""
+    cleaned = text.strip()
+    for category, pattern in CATEGORY_PATTERNS:
+        if pattern.search(cleaned):
+            return category
     return "其他"
 
 
-def _extract_record_date(title: str) -> str:
-    match = re.search(r"(\d{4})年(\d{1,2})月(\d{1,2})日", title)
+def _extract_record_date(text: str) -> str:
+    match = re.search(r"(\d{4})年(\d{1,2})月(\d{1,2})日", text)
     if match:
         y, m, d = int(match.group(1)), int(match.group(2)), int(match.group(3))
         return f"{y:04d}-{m:02d}-{d:02d}"
@@ -180,7 +233,7 @@ def _format_code(category: str, raw_code: str) -> str:
     code = raw_code.strip()
     if not code:
         return ""
-    if category in {"特", "纪", "J", "T"} and not code.startswith(category):
+    if category in {"特", "紀", "J", "T"} and not re.match(r"^[特纪紀JT]", code, re.IGNORECASE):
         return f"{category}{code}"
     return code
 
@@ -202,7 +255,7 @@ def _classify_header(col_text: str) -> str:
     return "unknown"
 
 
-def _parse_table(table: Tag, category: str, record_date: str) -> List[Dict[str, Any]]:
+def _parse_table(table: Tag, page_category: str, record_date: str) -> List[Dict[str, Any]]:
     rows = table.find_all("tr")
     if len(rows) < 2:
         return []
@@ -213,6 +266,11 @@ def _parse_table(table: Tag, category: str, record_date: str) -> List[Dict[str, 
 
     roles = [_classify_header(h) for h in header_cells]
     col_count = len(roles)
+
+    # 若首列表頭同時含名稱與生肖字樣（例如生肖表頭「一轮生肖邮票」），仍可輔助判斷分類
+    header_joined = " ".join(header_cells)
+    if page_category == "其他":
+        page_category = _detect_category(header_joined)
 
     # 偵測 J字 / T字 雙欄並排表格
     if col_count >= 6 and col_count % 2 == 0 and roles[: col_count // 2] == roles[col_count // 2 :]:
@@ -264,11 +322,16 @@ def _parse_table(table: Tag, category: str, record_date: str) -> List[Dict[str, 
             if mint_price is None and cto_price is None and used_price is None:
                 continue
 
+            # 若頁面分類為其他，再以郵票編號與名稱做精準正則補判
+            row_category = page_category
+            if row_category == "其他":
+                row_category = _detect_category(f"{raw_code} {name}")
+
             results.append(
                 {
-                    "code": _format_code(category, raw_code),
+                    "code": _format_code(row_category, raw_code),
                     "name": name,
-                    "category": category,
+                    "category": row_category,
                     "mint": mint_price,
                     "cto": cto_price,
                     "used": used_price,
@@ -282,8 +345,12 @@ def _parse_table(table: Tag, category: str, record_date: str) -> List[Dict[str, 
 def _collect_article_links(
     session: requests.Session,
     list_urls: List[str],
-    max_articles: int,
+    per_source_limit: int = PER_SOURCE_ARTICLE_LIMIT,
 ) -> List[Tuple[str, str]]:
+    """
+    從 lm3790（/cang/jg*.html）與 lm2992（/cang/xw*.html）分別配額擷取行情連結，
+    確保文革、特種、J字、T字、年冊與生肖系列皆不會互相排擠遺漏。
+    """
     seen_urls = set()
     articles: List[Tuple[str, str]] = []
 
@@ -295,6 +362,7 @@ def _collect_article_links(
         if not html:
             continue
 
+        source_count = 0
         try:
             soup = BeautifulSoup(html, "html.parser")
             for a_tag in soup.find_all("a", href=True):
@@ -304,21 +372,23 @@ def _collect_article_links(
 
                 if not parsed.netloc.endswith("cngold.org"):
                     continue
-                if not re.search(r"/cang/xw\d+\.html$", parsed.path):
+                # 同時支援 lm3790 的 /cang/jg*.html 與 lm2992 的 /cang/xw*.html
+                if not re.search(r"/cang/(?:xw|jg)\d+\.html$", parsed.path):
                     continue
 
                 title = a_tag.get("title") or a_tag.get_text(" ", strip=True)
                 if "邮票" not in title:
                     continue
-                if not any(k in title for k in ("价格", "行情", "报价")):
+                if not any(k in title for k in ("价格", "行情", "报价", "收价")):
                     continue
                 if full_url in seen_urls:
                     continue
 
                 seen_urls.add(full_url)
                 articles.append((full_url, title))
-                if len(articles) >= max_articles:
-                    return articles
+                source_count += 1
+                if source_count >= per_source_limit:
+                    break
         except Exception as exc:
             logger.error("解析列表頁失敗 [%s]: %s", list_url, exc)
 
@@ -334,15 +404,10 @@ def apply_smart_diff(
     scraped_records: List[Dict[str, Any]],
     checked_at: str,
 ) -> Tuple[int, int]:
-    """
-    價格變動才寫入歷史紀錄；若新票/蓋銷/信銷價格均未變動，僅更新檢查時間。
-    回傳 (新增價格變動筆數, 本次檢查郵票數)。
-    """
     stamps_map: Dict[str, Any] = store.setdefault("stamps", {})
     appended_count = 0
     checked_count = 0
 
-    # 依日期由舊到新處理，確保首次建檔或補齊多日文章時歷史順序正確
     ordered_records = sorted(scraped_records, key=lambda r: r["date"])
 
     for rec in ordered_records:
@@ -380,7 +445,6 @@ def apply_smart_diff(
             continue
 
         last_point = history[-1]
-        # 若擷取到列表頁殘留的更早日期舊文章，不回溯覆蓋最新趨勢
         if rec["date"] < last_point["date"]:
             continue
 
@@ -415,7 +479,7 @@ def main() -> None:
     processed = 0
 
     with requests.Session() as session:
-        article_links = _collect_article_links(session, TARGET_URLS, max_articles=16)
+        article_links = _collect_article_links(session, TARGET_URLS)
         logger.info("共探索到 %d 篇郵票行情文章。", len(article_links))
 
         for url, list_title in article_links:
@@ -426,18 +490,19 @@ def main() -> None:
 
             try:
                 soup = BeautifulSoup(html, "html.parser")
-                h1 = soup.find("h1")
-                page_title = h1.get_text(strip=True) if h1 else list_title
-                category = _detect_category(page_title)
-                record_date = _extract_record_date(page_title)
+                article_title = _extract_article_title(soup, list_title)
+                combined_title = f"{article_title} {list_title}"
+
+                category = _detect_category(combined_title)
+                record_date = _extract_record_date(combined_title)
 
                 page_records: List[Dict[str, Any]] = []
                 for tbl in soup.find_all("table"):
                     page_records.extend(_parse_table(tbl, category, record_date))
 
                 logger.info(
-                    "文章 [%s] (%s / %s) 解析得 %d 筆",
-                    page_title[:26],
+                    "文章 [%s] -> 分類:[%s] 日期:[%s] 解析得 %d 筆",
+                    article_title[:28],
                     category,
                     record_date,
                     len(page_records),
