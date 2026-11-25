@@ -53,19 +53,26 @@ PRICE_FIELDS = (
     "site_b_used",
 )
 
+# 強制歸類為「其他」的專區頁面關鍵字（不可被內部的 J/T 編號覆寫分類）
+FORCE_OTHER_KEYWORDS = ("小型张", "小本票", "普航欠改")
+
 # 分類正則規則（依精確度排序）
 CATEGORY_PATTERNS: List[Tuple[str, re.Pattern]] = [
-    ("文", re.compile(r"文革|^文\s*\d+")),
-    ("特", re.compile(r"特种邮票|特字|^特\s*\d+")),
-    ("紀", re.compile(r"纪念邮票|老纪特|纪字|紀字|^[纪紀]\s*\d+")),
-    ("J", re.compile(r"J字|(?<![A-Za-z])J(?:\s*字|\d+)", re.IGNORECASE)),
-    ("T", re.compile(r"T字|(?<![A-Za-z])T(?:\s*字|\d+)", re.IGNORECASE)),
+    ("文", re.compile(r"文革|全国山河一片红|黑题词|全面胜利万岁|(?:^|[\s\d.])文\s*(?:\d{1,2}(?:-\d{1,2})?|[一二三四五六七八九十]{1,3})")),
+    ("特", re.compile(r"特种邮票|特字|(?:^|\s)特\s*\d+")),
+    ("紀", re.compile(r"纪念邮票|老纪特|纪字|紀字|(?:^|\s)[纪紀]\s*\d+")),
+    ("J", re.compile(r"J字|J票|(?<![A-Za-z])J(?:\s*字|\s*\d+)", re.IGNORECASE)),
+    ("T", re.compile(r"T字|T票|(?<![A-Za-z])T(?:\s*字|\s*\d+)", re.IGNORECASE)),
     ("編號", re.compile(r"编号邮票|^\d{1,2}\s*[-—]\s*\d{1,2}$")),
     ("生肖", re.compile(r"生肖|[一二三四]轮.*(?:大版|猴|鸡|狗|猪|鼠|牛|虎|兔|龙|蛇|马|羊)")),
     ("年冊", re.compile(r"年册|年冊")),
 ]
 
 ZODIAC_ANIMALS = "鼠牛虎兔龙蛇马羊猴鸡狗猪"
+CN_NUM_MAP = {
+    "一": 1, "二": 2, "三": 3, "四": 4, "五": 5,
+    "六": 6, "七": 7, "八": 8, "九": 9, "十": 10,
+}
 
 
 # ==========================================
@@ -121,8 +128,28 @@ def _nfkc(text: str) -> str:
     return unicodedata.normalize("NFKC", text or "").strip()
 
 
+def _cn_wen_to_digit(cn_str: str) -> str:
+    """將「文一」~「文十九」轉換為「文1」~「文19」。"""
+    if cn_str.isdigit():
+        return str(int(cn_str))
+    if cn_str == "十":
+        return "10"
+    if cn_str.startswith("十") and len(cn_str) == 2 and cn_str[1] in CN_NUM_MAP:
+        return str(10 + CN_NUM_MAP[cn_str[1]])
+    if len(cn_str) == 1 and cn_str in CN_NUM_MAP:
+        return str(CN_NUM_MAP[cn_str])
+    return cn_str
+
+
+def _is_other_special_item(text: str) -> bool:
+    """判斷是否屬於小型張、小本票、普航欠改等應固定歸於「其他」之品項。"""
+    return bool(re.search(r"小型张|小全张|小本票|普/R|欠资|军邮|改值|航空|SB\d+", text, re.IGNORECASE))
+
+
 def _detect_category(text: str) -> str:
     cleaned = _nfkc(text)
+    if any(k in cleaned for k in FORCE_OTHER_KEYWORDS):
+        return "其他"
     for category, pattern in CATEGORY_PATTERNS:
         if pattern.search(cleaned):
             return category
@@ -130,7 +157,6 @@ def _detect_category(text: str) -> str:
 
 
 def _extract_variant_tag(name: str) -> str:
-    """擷取影響價格的版別／形式後綴（如 原版、再版、東貼、無齒、小型張等）。"""
     n = _nfkc(name)
     tags: List[str] = []
     if re.search(r"东贴|东北贴", n):
@@ -147,6 +173,8 @@ def _extract_variant_tag(name: str) -> str:
         tags.append("小型张")
     elif "小全张" in n:
         tags.append("小全张")
+    if "小本票" in n:
+        tags.append("小本票")
     if "大版" in n:
         tags.append("大版")
     elif "小版" in n:
@@ -157,24 +185,45 @@ def _extract_variant_tag(name: str) -> str:
 def _normalize_code_and_name(category: str, raw_code: str, raw_name: str) -> Tuple[str, str]:
     """
     統一雙資料源的志號與名稱：
-    - 若名稱開頭內嵌志號（如「文1 毛主席...」或「T46 猴票」），自動拆出標準志號。
-    - 統一全半形並去除編號內多餘空白（如「1- 6」->「1-6」）。
+    - 支援拆解「文1语录」「文 1 战无不胜」「文一金边」「SB1咕咚」「普/R1...」「P1...」等內嵌志號。
     """
     code = re.sub(r"\s+", "", _nfkc(raw_code))
     name = re.sub(r"\s+", " ", _nfkc(raw_name))
 
-    # 若 raw_code 為空，嘗試從名稱前綴拆解志號
     if not code:
-        m = re.match(r"^(文\d+(?:-\d+)?|特\d+|[纪紀]\d+|J\d+|T\d+)\s*(.+)$", name, re.IGNORECASE)
+        m = re.match(
+            r"^("
+            r"文\s*\d+(?:-\d+)?|"
+            r"文[一二三四五六七八九十]{1,3}|"
+            r"特\s*\d+|"
+            r"[纪紀]\s*\d+|"
+            r"J\s*\d+|"
+            r"T\s*\d+|"
+            r"SB\s*\d+|"
+            r"普/R\d+[A-Za-z甲乙]?|"
+            r"R\d+(?:/普)?|"
+            r"P\d+"
+            r")\s*[.、:：\-—]?\s*(.*)$",
+            name,
+            re.IGNORECASE,
+        )
         if m:
-            code = m.group(1).upper()
-            name = m.group(2).strip(" -—:：.")
+            code = re.sub(r"\s+", "", m.group(1))
+            rest = m.group(2).strip(" .、:：-—")
+            name = rest if rest else code
 
-    # 統一繁簡「紀」字志號與大小寫
     if code:
+        # 轉換「文一」->「文1」
+        m_wen_cn = re.match(r"^文([一二三四五六七八九十]{1,3})$", code)
+        if m_wen_cn:
+            code = f"文{_cn_wen_to_digit(m_wen_cn.group(1))}"
+
         code = re.sub(r"^纪", "紀", code)
-        if re.match(r"^[jt]\d+", code):
-            code = code[0].upper() + code[1:]
+        if re.match(r"^(?:j|t|sb|c|s|p|r)\d+", code, re.IGNORECASE):
+            m_alpha = re.match(r"^([a-zA-Z]+)(.*)$", code)
+            if m_alpha:
+                code = m_alpha.group(1).upper() + m_alpha.group(2)
+
         if category in {"特", "紀", "J", "T"} and not re.match(r"^[特紀JT]", code):
             code = f"{category}{code}"
         if category == "文" and re.match(r"^\d+", code):
@@ -184,12 +233,6 @@ def _normalize_code_and_name(category: str, raw_code: str, raw_name: str) -> Tup
 
 
 def _build_canonical_id(category: str, code: str, name: str) -> str:
-    """
-    跨站實體去重主鍵：
-    1. 有標準志號者：以 `category::code`（若含版別差異如原版/再版/無齒則附加版別）作為唯一鍵，
-       讓「T88 兵马俑」與「T88 兵马佣」能精準合併。
-    2. 無志號者（如生肖、年冊）：透過全半形統一與去標點清洗對齊（生肖依 年份+屬相 對齊）。
-    """
     variant = _extract_variant_tag(name)
     if code:
         base = f"{category}::{code}"
@@ -207,16 +250,26 @@ def _build_canonical_id(category: str, code: str, name: str) -> str:
 
 
 def _migrate_existing_store(store: Dict[str, Any]) -> None:
-    """將舊版格式（mint/cto/used 或舊主鍵）無痛遷移至雙站對比結構。"""
+    """自動修復與正規化舊資料（含文1、文2補歸類與保留小型張/小本票/普航欠改於其他分類）。"""
     old_stamps = store.get("stamps", {})
     migrated: Dict[str, Any] = {}
 
     for _, entry in old_stamps.items():
         raw_cat = entry.get("category", "其他")
         raw_cat = "紀" if raw_cat == "纪" else ("年冊" if raw_cat == "年册" else raw_cat)
-        code, name = _normalize_code_and_name(raw_cat, entry.get("code", ""), entry.get("name", ""))
-        cat = raw_cat if raw_cat != "其他" else _detect_category(f"{code} {name}")
-        code, name = _normalize_code_and_name(cat, code, name)
+        raw_code = entry.get("code", "")
+        raw_name = entry.get("name", "")
+
+        if raw_cat == "其他" and not _is_other_special_item(f"{raw_code} {raw_name}"):
+            cat = _detect_category(f"{raw_code} {raw_name}")
+        else:
+            cat = raw_cat
+
+        code, name = _normalize_code_and_name(cat, raw_code, raw_name)
+        if cat == "其他" and not _is_other_special_item(f"{code} {name}"):
+            cat = _detect_category(f"{code} {name}")
+            code, name = _normalize_code_and_name(cat, code, name)
+
         canon_id = _build_canonical_id(cat, code, name)
 
         converted_hist: List[Dict[str, Any]] = []
@@ -241,7 +294,6 @@ def _migrate_existing_store(store: Dict[str, Any]) -> None:
             converted_hist.append(point)
 
         if canon_id in migrated:
-            # 合併歷史點
             by_date = {p["date"]: p for p in migrated[canon_id]["history"]}
             for p in converted_hist:
                 if p["date"] in by_date:
@@ -292,7 +344,6 @@ def _polite_sleep() -> None:
 
 
 def _fetch_html(session: requests.Session, url: str, referer: str = "") -> Optional[str]:
-    """安全發送單次 HTTP GET 請求（嚴禁無限重試迴圈）。"""
     req_headers = dict(HEADERS)
     if referer:
         req_headers["Referer"] = referer
@@ -321,7 +372,7 @@ def _extract_record_date(text: str) -> str:
 
 def _parse_price(raw_text: str) -> Optional[float]:
     text = _nfkc(raw_text)
-    if not text or all(ch in "-—/\\暂无待定议价 " for ch in text):
+    if not text or all(ch in "-—/\\暂无待定议价电 " for ch in text):
         return None
 
     multiplier = 10000.0 if "万" in text else 1.0
@@ -339,9 +390,12 @@ def _parse_price(raw_text: str) -> Optional[float]:
 
 def _classify_header(col_text: str) -> str:
     h = re.sub(r"\s+", "", _nfkc(col_text))
-    if "编号" in h or "志号" in h or "序号" == h:
-        return "code" if h != "序号" else "ignore"
-    if "名称" in h or "邮票" in h or "品种" in h or "生肖" in h:
+    # 必須優先排除「邮票类别」「发行量」「发行日期」「序号」等非價格與非名稱欄
+    if any(k in h for k in ("类别", "发行量", "发行日期", "备注")) or h == "序号":
+        return "ignore"
+    if "编号" in h or "志号" in h:
+        return "code"
+    if "名称" in h or "邮票" in h or "品种" in h or "生肖" in h or "品名" in h:
         return "name"
     if "盖销" in h:
         return "cto"
@@ -355,21 +409,35 @@ def _classify_header(col_text: str) -> str:
 
 
 def _find_header_row(rows: List[Tag]) -> Tuple[int, List[str]]:
-    """支援跨列標題（如生肖頁先有「收购价格」再有「整版票/四方联/单枚」），回傳真正的欄位列索引。"""
     for idx in range(min(3, len(rows))):
         cells = [c.get_text(" ", strip=True) for c in rows[idx].find_all(["th", "td"])]
         if len(cells) < 2:
             continue
         roles = [_classify_header(c) for c in cells]
         if any(r in ("name", "code", "mint", "cto", "used") for r in roles):
-            # 若下一列也是純子表頭（例如 整版票 / 单枚），合併處理
             if idx + 1 < len(rows):
                 next_cells = [c.get_text(" ", strip=True) for c in rows[idx + 1].find_all(["th", "td"])]
                 next_roles = [_classify_header(c) for c in next_cells]
                 if len(next_cells) >= len(cells) and any(r in ("mint", "mint_alt") for r in next_roles):
-                    return idx + 1, ["name"] + next_roles if next_roles[0] == "unknown" else next_roles
+                    return idx + 1, ["name"] + next_roles[1:] if next_roles[0] == "unknown" else next_roles
             return idx, roles
     return 0, []
+
+
+def _split_column_groups(roles: List[str]) -> List[Tuple[int, List[str]]]:
+    """
+    智能切分單表與多欄並排表格（支援 6 欄 J/T 表、8 欄老紀特表、6 欄小本票表等）。
+    """
+    col_count = len(roles)
+    anchor_role = "code" if roles.count("code") >= 2 else ("name" if roles.count("name") >= 2 else None)
+    if anchor_role:
+        starts = [i for i, r in enumerate(roles) if r == anchor_role]
+        groups: List[Tuple[int, List[str]]] = []
+        for k, start in enumerate(starts):
+            end = starts[k + 1] if k + 1 < len(starts) else col_count
+            groups.append((start, roles[start:end]))
+        return groups
+    return [(0, roles)]
 
 
 def _parse_table(
@@ -377,6 +445,8 @@ def _parse_table(
     site_key: str,
     page_category: str,
     record_date: str,
+    force_category_other: bool = False,
+    tag_suffix: str = "",
 ) -> List[Dict[str, Any]]:
     rows = table.find_all("tr")
     if len(rows) < 2:
@@ -386,27 +456,19 @@ def _parse_table(
     if not roles:
         return []
 
-    col_count = len(roles)
-    # 偵測雙欄並排表格（例如 6 欄 JT 表、8 欄老紀特表）
-    if col_count >= 6 and col_count % 2 == 0 and roles[: col_count // 2] == roles[col_count // 2 :]:
-        group_size = col_count // 2
-        groups = [roles[:group_size], roles[group_size:]]
-    else:
-        groups = [roles]
-
+    groups = _split_column_groups(roles)
     results: List[Dict[str, Any]] = []
+
     for tr in rows[hdr_idx + 1 :]:
         cells = [c.get_text(" ", strip=True) for c in tr.find_all(["td", "th"])]
         if not cells:
             continue
 
-        offset = 0
-        for grp_roles in groups:
+        for start, grp_roles in groups:
             grp_len = len(grp_roles)
-            if offset + grp_len > len(cells):
-                break
-            chunk = cells[offset : offset + grp_len]
-            offset += grp_len
+            if start + grp_len > len(cells):
+                continue
+            chunk = cells[start : start + grp_len]
 
             raw_code = ""
             raw_name = ""
@@ -433,17 +495,26 @@ def _parse_table(
                 mint_price = mint_alt_price
 
             clean_check = re.sub(r"\s+", "", _nfkc(raw_name))
-            if not clean_check or clean_check in ("名称", "邮票名称", "编号", "品种"):
+            if not clean_check or clean_check in ("名称", "邮票名称", "编号", "品种", "名称（老本）", "名称（新本）"):
                 continue
             if mint_price is None and cto_price is None and used_price is None:
                 continue
 
-            row_cat = page_category if page_category != "其他" else _detect_category(f"{raw_code} {raw_name}")
+            if force_category_other:
+                row_cat = "其他"
+            else:
+                row_cat = page_category if page_category != "其他" else _detect_category(f"{raw_code} {raw_name}")
+
             code, name = _normalize_code_and_name(row_cat, raw_code, raw_name)
             if not name:
                 continue
-            if row_cat == "其他":
+
+            if not force_category_other and row_cat == "其他":
                 row_cat = _detect_category(f"{code} {name}")
+                code, name = _normalize_code_and_name(row_cat, code, name)
+
+            if tag_suffix and tag_suffix not in name:
+                name = f"{name}（{tag_suffix}）"
 
             results.append(
                 {
@@ -476,8 +547,8 @@ def _extract_cngold_title(soup: BeautifulSoup, fallback: str) -> str:
     return fallback
 
 
-def scrape_site_a(session: requests.Session, per_source_limit: int = 8) -> Tuple[List[Dict[str, Any]], int]:
-    """爬取資料源 A：金投收藏網 lm3790（文/特/J/T/年冊）與 lm2992（生肖）。"""
+def scrape_site_a(session: requests.Session, per_source_limit: int = 10) -> Tuple[List[Dict[str, Any]], int]:
+    """爬取資料源 A：金投收藏網 lm3790（文革/特種/J字/T字/年冊）與 lm2992（生肖）。"""
     seen_urls = set()
     articles: List[Tuple[str, str]] = []
 
@@ -545,17 +616,22 @@ def scrape_site_a(session: requests.Session, per_source_limit: int = 8) -> Tuple
 # 資料源 B：點購收藏網 (www.5151sc.com)
 # ==========================================
 
-def scrape_site_b(session: requests.Session, max_pages: int = 10) -> Tuple[List[Dict[str, Any]], int]:
-    """爬取資料源 B：點購收藏網 shougou.html 及紀念、特種、文革、J/T、生肖、編號等子頁面。"""
+def scrape_site_b(session: requests.Session, max_pages: int = 20) -> Tuple[List[Dict[str, Any]], int]:
+    """
+    爬取資料源 B：點購收藏網 shougou.html 及其全系列子頁面：
+    紀、特、文、編號、J 字、T 字、生肖、年冊，以及小型張、小本票、普航欠改（歸類於「其他」）。
+    """
     index_html = _fetch_html(session, SC5151_INDEX_URL, referer="http://www.5151sc.com/")
     if not index_html:
         return [], 0
 
     include_kw = (
-        "纪念邮票", "特种邮票", "文革邮票", "J字邮票", "T字邮票",
-        "十二生肖", "三轮生肖", "二轮生肖", "编号邮票", "年册",
+        "纪念邮票", "特种邮票", "文革邮票", "编号邮票",
+        "J字邮票", "T字邮票", "J票", "T票",
+        "小型张", "小本票", "普航欠改",
+        "十二生肖", "三轮生肖", "二轮生肖", "年册",
     )
-    exclude_kw = ("纸币", "人民币", "金银", "银元", "硬币", "磁卡", "IC卡", "章程", "资讯", "视频")
+    exclude_kw = ("纸币", "人民币", "金银", "银元", "硬币", "磁卡", "IC卡", "章程", "资讯", "视频", "大版票", "小版票")
 
     seen_urls = set()
     subpages: List[Tuple[str, str]] = []
@@ -598,13 +674,31 @@ def scrape_site_b(session: requests.Session, max_pages: int = 10) -> Tuple[List[
             h1 = soup.find("h1")
             page_title = h1.get_text(" ", strip=True) if h1 else (soup.title.string.strip() if soup.title and soup.title.string else link_title)
             body_text = soup.get_text(" ", strip=True)[:1200]
+            title_combo = f"{page_title} {link_title}"
 
-            category = _detect_category(f"{page_title} {link_title}")
+            # 判斷是否為「小型張 / 小本票 / 普航欠改」專區 -> 鎖定歸類於「其他」
+            force_other = any(k in title_combo for k in FORCE_OTHER_KEYWORDS)
+            tag_suffix = ""
+            if "小型张" in title_combo:
+                tag_suffix = "小型张"
+            elif "小本票" in title_combo:
+                tag_suffix = "小本票"
+
+            category = "其他" if force_other else _detect_category(title_combo)
             record_date = _extract_record_date(f"{page_title} {body_text}")
 
             page_rows: List[Dict[str, Any]] = []
             for tbl in soup.find_all("table"):
-                page_rows.extend(_parse_table(tbl, "site_b", category, record_date))
+                page_rows.extend(
+                    _parse_table(
+                        tbl,
+                        site_key="site_b",
+                        page_category=category,
+                        record_date=record_date,
+                        force_category_other=force_other,
+                        tag_suffix=tag_suffix,
+                    )
+                )
 
             logger.info("[Site B] %s -> 分類:[%s] 日期:[%s] %d 筆", page_title[:24], category, record_date, len(page_rows))
             records.extend(page_rows)
@@ -624,13 +718,7 @@ def apply_dual_source_smart_diff(
     all_records: List[Dict[str, Any]],
     checked_at: str,
 ) -> Tuple[int, int]:
-    """
-    先依 (canon_id, date) 聚合雙站同日價格，再與最新歷史比對：
-    任一來源或品相價格變動才寫入歷史紀錄，並繼承未更新站點的既有最新價格避免斷線。
-    """
     stamps_map: Dict[str, Any] = store.setdefault("stamps", {})
-
-    # 依實體主鍵與日期分組
     grouped: Dict[str, Dict[str, Dict[str, Any]]] = {}
     meta_by_id: Dict[str, Dict[str, str]] = {}
 
@@ -678,7 +766,6 @@ def apply_dual_source_smart_diff(
             }
             stamps_map[cid] = entry
         else:
-            # 保留較完整名稱
             if len(meta["name"]) > len(entry.get("name", "")):
                 entry["name"] = meta["name"]
             entry["last_checked"] = checked_at
@@ -708,7 +795,6 @@ def apply_dual_source_smart_diff(
                 changed = any(new_point[f] != last_point.get(f) for f in PRICE_FIELDS)
                 if changed:
                     if dt == last_point["date"]:
-                        # 同日補齊另一來源或同日價格修正，直接更新同日快照
                         last_point.update(new_point)
                     else:
                         history.append(new_point)
@@ -730,9 +816,9 @@ def main() -> None:
     checked_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     with requests.Session() as session:
-        rec_a, proc_a = scrape_site_a(session, per_source_limit=8)
+        rec_a, proc_a = scrape_site_a(session, per_source_limit=10)
         _polite_sleep()
-        rec_b, proc_b = scrape_site_b(session, max_pages=10)
+        rec_b, proc_b = scrape_site_b(session, max_pages=20)
 
     all_records = rec_a + rec_b
     logger.info(
