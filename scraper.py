@@ -5,6 +5,7 @@ import os
 import random
 import re
 import time
+import unicodedata
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -20,15 +21,16 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
 )
-logger = logging.getLogger("cngold_serverless_scraper")
+logger = logging.getLogger("dual_source_stamp_scraper")
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_ENC_PATH = BASE_DIR / "docs" / "data.enc"
 
-TARGET_URLS = [
+CNGOLD_LIST_URLS = [
     "https://m.cngold.org/cang/lm3790/",
     "https://m.cngold.org/cang/lm2992/",
 ]
+SC5151_INDEX_URL = "http://www.5151sc.com/shougou.html"
 
 HEADERS = {
     "User-Agent": (
@@ -38,12 +40,18 @@ HEADERS = {
     ),
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-    "Referer": "https://m.cngold.org/cang/",
 }
 
 REQUEST_TIMEOUT = 15
 PBKDF2_ITERATIONS = 100_000
-PER_SOURCE_ARTICLE_LIMIT = 10
+PRICE_FIELDS = (
+    "site_a_mint",
+    "site_a_cto",
+    "site_a_used",
+    "site_b_mint",
+    "site_b_cto",
+    "site_b_used",
+)
 
 # 分類正則規則（依精確度排序）
 CATEGORY_PATTERNS: List[Tuple[str, re.Pattern]] = [
@@ -52,9 +60,12 @@ CATEGORY_PATTERNS: List[Tuple[str, re.Pattern]] = [
     ("紀", re.compile(r"纪念邮票|老纪特|纪字|紀字|^[纪紀]\s*\d+")),
     ("J", re.compile(r"J字|(?<![A-Za-z])J(?:\s*字|\d+)", re.IGNORECASE)),
     ("T", re.compile(r"T字|(?<![A-Za-z])T(?:\s*字|\d+)", re.IGNORECASE)),
+    ("編號", re.compile(r"编号邮票|^\d{1,2}\s*[-—]\s*\d{1,2}$")),
     ("生肖", re.compile(r"生肖|[一二三四]轮.*(?:大版|猴|鸡|狗|猪|鼠|牛|虎|兔|龙|蛇|马|羊)")),
     ("年冊", re.compile(r"年册|年冊")),
 ]
+
+ZODIAC_ANIMALS = "鼠牛虎兔龙蛇马羊猴鸡狗猪"
 
 
 # ==========================================
@@ -72,7 +83,6 @@ def _derive_aes_key(password: str, salt: bytes, iterations: int) -> bytes:
 
 
 def encrypt_json_payload(data: Dict[str, Any], password: str) -> str:
-    """將資料序列化為 JSON 並以 AES-256-GCM 加密輸出。"""
     salt = os.urandom(16)
     iv = os.urandom(12)
     key = _derive_aes_key(password, salt, PBKDF2_ITERATIONS)
@@ -81,7 +91,7 @@ def encrypt_json_payload(data: Dict[str, Any], password: str) -> str:
     ciphertext = AESGCM(key).encrypt(iv, plaintext, None)
 
     envelope = {
-        "v": 1,
+        "v": 2,
         "alg": "PBKDF2-SHA256-AES-256-GCM",
         "iter": PBKDF2_ITERATIONS,
         "salt": base64.b64encode(salt).decode("ascii"),
@@ -103,36 +113,153 @@ def decrypt_json_payload(raw_text: str, password: str) -> Dict[str, Any]:
     return json.loads(plaintext.decode("utf-8"))
 
 
-def _migrate_legacy_categories(store: Dict[str, Any]) -> None:
-    """自動修復先前誤歸類為「其他」的舊紀錄，避免歷史資料殘留錯誤標籤。"""
+# ==========================================
+# 實體去重與名稱／志號正規化 (Entity Reconciliation)
+# ==========================================
+
+def _nfkc(text: str) -> str:
+    return unicodedata.normalize("NFKC", text or "").strip()
+
+
+def _detect_category(text: str) -> str:
+    cleaned = _nfkc(text)
+    for category, pattern in CATEGORY_PATTERNS:
+        if pattern.search(cleaned):
+            return category
+    return "其他"
+
+
+def _extract_variant_tag(name: str) -> str:
+    """擷取影響價格的版別／形式後綴（如 原版、再版、東貼、無齒、小型張等）。"""
+    n = _nfkc(name)
+    tags: List[str] = []
+    if re.search(r"东贴|东北贴", n):
+        tags.append("东贴")
+    elif "东再" in n:
+        tags.append("东再")
+    if re.search(r"[\(（]原[\)）]|原版", n):
+        tags.append("原")
+    elif re.search(r"[\(（]再[\)）]|再版", n):
+        tags.append("再")
+    if "无齿" in n:
+        tags.append("无齿")
+    if "小型张" in n or "型张" in n:
+        tags.append("小型张")
+    elif "小全张" in n:
+        tags.append("小全张")
+    if "大版" in n:
+        tags.append("大版")
+    elif "小版" in n:
+        tags.append("小版")
+    return "+".join(tags)
+
+
+def _normalize_code_and_name(category: str, raw_code: str, raw_name: str) -> Tuple[str, str]:
+    """
+    統一雙資料源的志號與名稱：
+    - 若名稱開頭內嵌志號（如「文1 毛主席...」或「T46 猴票」），自動拆出標準志號。
+    - 統一全半形並去除編號內多餘空白（如「1- 6」->「1-6」）。
+    """
+    code = re.sub(r"\s+", "", _nfkc(raw_code))
+    name = re.sub(r"\s+", " ", _nfkc(raw_name))
+
+    # 若 raw_code 為空，嘗試從名稱前綴拆解志號
+    if not code:
+        m = re.match(r"^(文\d+(?:-\d+)?|特\d+|[纪紀]\d+|J\d+|T\d+)\s*(.+)$", name, re.IGNORECASE)
+        if m:
+            code = m.group(1).upper()
+            name = m.group(2).strip(" -—:：.")
+
+    # 統一繁簡「紀」字志號與大小寫
+    if code:
+        code = re.sub(r"^纪", "紀", code)
+        if re.match(r"^[jt]\d+", code):
+            code = code[0].upper() + code[1:]
+        if category in {"特", "紀", "J", "T"} and not re.match(r"^[特紀JT]", code):
+            code = f"{category}{code}"
+        if category == "文" and re.match(r"^\d+", code):
+            code = f"文{code}"
+
+    return code, name
+
+
+def _build_canonical_id(category: str, code: str, name: str) -> str:
+    """
+    跨站實體去重主鍵：
+    1. 有標準志號者：以 `category::code`（若含版別差異如原版/再版/無齒則附加版別）作為唯一鍵，
+       讓「T88 兵马俑」與「T88 兵马佣」能精準合併。
+    2. 無志號者（如生肖、年冊）：透過全半形統一與去標點清洗對齊（生肖依 年份+屬相 對齊）。
+    """
+    variant = _extract_variant_tag(name)
+    if code:
+        base = f"{category}::{code}"
+        return f"{base}::{variant}" if variant else base
+
+    clean = re.sub(r"[\s\W_]+", "", _nfkc(name))
+    if category == "生肖":
+        ym = re.search(r"(19\d{2}|20\d{2})", clean)
+        am = re.search(f"([{ZODIAC_ANIMALS}])", clean)
+        if ym and am:
+            base = f"生肖::{ym.group(1)}{am.group(1)}"
+            return f"{base}::{variant}" if variant else base
+
+    return f"{category}::{clean}"
+
+
+def _migrate_existing_store(store: Dict[str, Any]) -> None:
+    """將舊版格式（mint/cto/used 或舊主鍵）無痛遷移至雙站對比結構。"""
     old_stamps = store.get("stamps", {})
     migrated: Dict[str, Any] = {}
 
-    for key, entry in old_stamps.items():
-        cat = entry.get("category", "其他")
-        code = entry.get("code", "")
-        name = entry.get("name", "")
-        if cat == "其他":
-            fixed_cat = _detect_category(f"{code} {name}")
-            if fixed_cat != "其他":
-                cat = fixed_cat
-                entry["category"] = fixed_cat
+    for _, entry in old_stamps.items():
+        raw_cat = entry.get("category", "其他")
+        raw_cat = "紀" if raw_cat == "纪" else ("年冊" if raw_cat == "年册" else raw_cat)
+        code, name = _normalize_code_and_name(raw_cat, entry.get("code", ""), entry.get("name", ""))
+        cat = raw_cat if raw_cat != "其他" else _detect_category(f"{code} {name}")
+        code, name = _normalize_code_and_name(cat, code, name)
+        canon_id = _build_canonical_id(cat, code, name)
 
-        new_key = f"{cat}::{code}::{name}"
-        entry["id"] = new_key
-        if new_key in migrated:
-            # 合併歷史紀錄並依日期排序去重
-            existing_hist = {
-                (h.get("date"), h.get("mint"), h.get("cto"), h.get("used")): h
-                for h in migrated[new_key].get("history", [])
-            }
-            for h in entry.get("history", []):
-                existing_hist[(h.get("date"), h.get("mint"), h.get("cto"), h.get("used"))] = h
-            migrated[new_key]["history"] = sorted(
-                existing_hist.values(), key=lambda x: (x.get("date", ""), x.get("ts", ""))
-            )
+        converted_hist: List[Dict[str, Any]] = []
+        for h in entry.get("history", []):
+            if "site_a_mint" in h or "site_b_mint" in h:
+                point = {
+                    "date": h.get("date", ""),
+                    "ts": h.get("ts", ""),
+                    **{f: h.get(f) for f in PRICE_FIELDS},
+                }
+            else:
+                point = {
+                    "date": h.get("date", ""),
+                    "ts": h.get("ts", ""),
+                    "site_a_mint": h.get("mint"),
+                    "site_a_cto": h.get("cto"),
+                    "site_a_used": h.get("used"),
+                    "site_b_mint": None,
+                    "site_b_cto": None,
+                    "site_b_used": None,
+                }
+            converted_hist.append(point)
+
+        if canon_id in migrated:
+            # 合併歷史點
+            by_date = {p["date"]: p for p in migrated[canon_id]["history"]}
+            for p in converted_hist:
+                if p["date"] in by_date:
+                    for f in PRICE_FIELDS:
+                        if by_date[p["date"]].get(f) is None and p.get(f) is not None:
+                            by_date[p["date"]][f] = p[f]
+                else:
+                    by_date[p["date"]] = p
+            migrated[canon_id]["history"] = sorted(by_date.values(), key=lambda x: x["date"])
         else:
-            migrated[new_key] = entry
+            migrated[canon_id] = {
+                "id": canon_id,
+                "code": code,
+                "name": name,
+                "category": cat,
+                "last_checked": entry.get("last_checked", ""),
+                "history": converted_hist,
+            }
 
     store["stamps"] = migrated
 
@@ -147,7 +274,7 @@ def load_existing_store(password: str) -> Dict[str, Any]:
         store = decrypt_json_payload(raw, password)
         if not isinstance(store, dict) or "stamps" not in store:
             raise ValueError("資料格式不符")
-        _migrate_legacy_categories(store)
+        _migrate_existing_store(store)
         return store
     except Exception as exc:
         raise RuntimeError(
@@ -156,7 +283,7 @@ def load_existing_store(password: str) -> Dict[str, Any]:
 
 
 # ==========================================
-# 網頁抓取與 BeautifulSoup 解析模組
+# 共用 HTTP 與表格解析引擎
 # ==========================================
 
 def _polite_sleep() -> None:
@@ -164,56 +291,37 @@ def _polite_sleep() -> None:
     time.sleep(random.uniform(2.0, 3.0))
 
 
-def _fetch_html(session: requests.Session, url: str) -> Optional[str]:
+def _fetch_html(session: requests.Session, url: str, referer: str = "") -> Optional[str]:
     """安全發送單次 HTTP GET 請求（嚴禁無限重試迴圈）。"""
+    req_headers = dict(HEADERS)
+    if referer:
+        req_headers["Referer"] = referer
     try:
-        resp = session.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
+        resp = session.get(url, headers=req_headers, timeout=REQUEST_TIMEOUT)
         resp.raise_for_status()
-        resp.encoding = resp.apparent_encoding or "utf-8"
+        enc = resp.apparent_encoding or "utf-8"
+        if enc.lower() in ("gb2312", "gbk"):
+            enc = "gb18030"
+        resp.encoding = enc
         return resp.text
     except requests.RequestException as exc:
         logger.warning("請求失敗，已安全跳過 [%s]: %s", url, exc)
         return None
 
 
-def _extract_article_title(soup: BeautifulSoup, fallback: str) -> str:
-    """
-    正確擷取文章主標題，排除網站導覽列 Logo 的 <h1>（如「金投网-手机版」）。
-    """
-    for h1 in soup.find_all("h1"):
-        txt = h1.get_text(" ", strip=True)
-        if txt and "金投网" not in txt and len(txt) > 6:
-            return txt
-
-    if soup.title and soup.title.string:
-        title_txt = soup.title.string.strip()
-        if title_txt and "金投网" not in title_txt[:8]:
-            return title_txt
-        return title_txt
-
-    return fallback
-
-
-def _detect_category(text: str) -> str:
-    """使用正則表達式識別郵票分類：特、紀、文、J、T、生肖、年冊。"""
-    cleaned = text.strip()
-    for category, pattern in CATEGORY_PATTERNS:
-        if pattern.search(cleaned):
-            return category
-    return "其他"
-
-
 def _extract_record_date(text: str) -> str:
-    match = re.search(r"(\d{4})年(\d{1,2})月(\d{1,2})日", text)
-    if match:
-        y, m, d = int(match.group(1)), int(match.group(2)), int(match.group(3))
-        return f"{y:04d}-{m:02d}-{d:02d}"
+    m1 = re.search(r"(\d{4})年(\d{1,2})月(\d{1,2})日", text)
+    if m1:
+        return f"{int(m1.group(1)):04d}-{int(m1.group(2)):02d}-{int(m1.group(3)):02d}"
+    m2 = re.search(r"(?:发布时间|更新时间)[：:\s]*(\d{4})-(\d{1,2})-(\d{1,2})", text)
+    if m2:
+        return f"{int(m2.group(1)):04d}-{int(m2.group(2)):02d}-{int(m2.group(3)):02d}"
     return datetime.now().strftime("%Y-%m-%d")
 
 
 def _parse_price(raw_text: str) -> Optional[float]:
-    text = raw_text.strip()
-    if not text or all(ch in "-—/\\暂无待定 " for ch in text):
+    text = _nfkc(raw_text)
+    if not text or all(ch in "-—/\\暂无待定议价 " for ch in text):
         return None
 
     multiplier = 10000.0 if "万" in text else 1.0
@@ -229,50 +337,57 @@ def _parse_price(raw_text: str) -> Optional[float]:
         return None
 
 
-def _format_code(category: str, raw_code: str) -> str:
-    code = raw_code.strip()
-    if not code:
-        return ""
-    if category in {"特", "紀", "J", "T"} and not re.match(r"^[特纪紀JT]", code, re.IGNORECASE):
-        return f"{category}{code}"
-    return code
-
-
 def _classify_header(col_text: str) -> str:
-    h = col_text.strip()
-    if "编号" in h or "志号" in h:
-        return "code"
+    h = re.sub(r"\s+", "", _nfkc(col_text))
+    if "编号" in h or "志号" in h or "序号" == h:
+        return "code" if h != "序号" else "ignore"
     if "名称" in h or "邮票" in h or "品种" in h or "生肖" in h:
         return "name"
     if "盖销" in h:
         return "cto"
-    if "信销" in h:
+    if "信销" in h or "旧票" in h:
         return "used"
-    if any(k in h for k in ("新票", "收价", "征价", "单枚", "单版", "价格")):
+    if any(k in h for k in ("新票", "收价", "征价", "单枚", "单版", "收购", "价格")):
         return "mint"
     if any(k in h for k in ("整版", "原包")):
         return "mint_alt"
     return "unknown"
 
 
-def _parse_table(table: Tag, page_category: str, record_date: str) -> List[Dict[str, Any]]:
+def _find_header_row(rows: List[Tag]) -> Tuple[int, List[str]]:
+    """支援跨列標題（如生肖頁先有「收购价格」再有「整版票/四方联/单枚」），回傳真正的欄位列索引。"""
+    for idx in range(min(3, len(rows))):
+        cells = [c.get_text(" ", strip=True) for c in rows[idx].find_all(["th", "td"])]
+        if len(cells) < 2:
+            continue
+        roles = [_classify_header(c) for c in cells]
+        if any(r in ("name", "code", "mint", "cto", "used") for r in roles):
+            # 若下一列也是純子表頭（例如 整版票 / 单枚），合併處理
+            if idx + 1 < len(rows):
+                next_cells = [c.get_text(" ", strip=True) for c in rows[idx + 1].find_all(["th", "td"])]
+                next_roles = [_classify_header(c) for c in next_cells]
+                if len(next_cells) >= len(cells) and any(r in ("mint", "mint_alt") for r in next_roles):
+                    return idx + 1, ["name"] + next_roles if next_roles[0] == "unknown" else next_roles
+            return idx, roles
+    return 0, []
+
+
+def _parse_table(
+    table: Tag,
+    site_key: str,
+    page_category: str,
+    record_date: str,
+) -> List[Dict[str, Any]]:
     rows = table.find_all("tr")
     if len(rows) < 2:
         return []
 
-    header_cells = [c.get_text(strip=True) for c in rows[0].find_all(["th", "td"])]
-    if not header_cells:
+    hdr_idx, roles = _find_header_row(rows)
+    if not roles:
         return []
 
-    roles = [_classify_header(h) for h in header_cells]
     col_count = len(roles)
-
-    # 若首列表頭同時含名稱與生肖字樣（例如生肖表頭「一轮生肖邮票」），仍可輔助判斷分類
-    header_joined = " ".join(header_cells)
-    if page_category == "其他":
-        page_category = _detect_category(header_joined)
-
-    # 偵測 J字 / T字 雙欄並排表格
+    # 偵測雙欄並排表格（例如 6 欄 JT 表、8 欄老紀特表）
     if col_count >= 6 and col_count % 2 == 0 and roles[: col_count // 2] == roles[col_count // 2 :]:
         group_size = col_count // 2
         groups = [roles[:group_size], roles[group_size:]]
@@ -280,8 +395,8 @@ def _parse_table(table: Tag, page_category: str, record_date: str) -> List[Dict[
         groups = [roles]
 
     results: List[Dict[str, Any]] = []
-    for tr in rows[1:]:
-        cells = [c.get_text(strip=True) for c in tr.find_all(["td", "th"])]
+    for tr in rows[hdr_idx + 1 :]:
+        cells = [c.get_text(" ", strip=True) for c in tr.find_all(["td", "th"])]
         if not cells:
             continue
 
@@ -294,7 +409,7 @@ def _parse_table(table: Tag, page_category: str, record_date: str) -> List[Dict[
             offset += grp_len
 
             raw_code = ""
-            name = ""
+            raw_name = ""
             mint_price: Optional[float] = None
             mint_alt_price: Optional[float] = None
             cto_price: Optional[float] = None
@@ -304,7 +419,7 @@ def _parse_table(table: Tag, page_category: str, record_date: str) -> List[Dict[
                 if role == "code":
                     raw_code = val
                 elif role == "name":
-                    name = val
+                    raw_name = val
                 elif role == "mint" and mint_price is None:
                     mint_price = _parse_price(val)
                 elif role == "mint_alt" and mint_alt_price is None:
@@ -317,21 +432,26 @@ def _parse_table(table: Tag, page_category: str, record_date: str) -> List[Dict[
             if mint_price is None:
                 mint_price = mint_alt_price
 
-            if not name or name in ("名称", "邮票名称"):
+            clean_check = re.sub(r"\s+", "", _nfkc(raw_name))
+            if not clean_check or clean_check in ("名称", "邮票名称", "编号", "品种"):
                 continue
             if mint_price is None and cto_price is None and used_price is None:
                 continue
 
-            # 若頁面分類為其他，再以郵票編號與名稱做精準正則補判
-            row_category = page_category
-            if row_category == "其他":
-                row_category = _detect_category(f"{raw_code} {name}")
+            row_cat = page_category if page_category != "其他" else _detect_category(f"{raw_code} {raw_name}")
+            code, name = _normalize_code_and_name(row_cat, raw_code, raw_name)
+            if not name:
+                continue
+            if row_cat == "其他":
+                row_cat = _detect_category(f"{code} {name}")
 
             results.append(
                 {
-                    "code": _format_code(row_category, raw_code),
+                    "site": site_key,
+                    "id": _build_canonical_id(row_cat, code, name),
+                    "code": code,
                     "name": name,
-                    "category": row_category,
+                    "category": row_cat,
                     "mint": mint_price,
                     "cto": cto_price,
                     "used": used_price,
@@ -342,23 +462,29 @@ def _parse_table(table: Tag, page_category: str, record_date: str) -> List[Dict[
     return results
 
 
-def _collect_article_links(
-    session: requests.Session,
-    list_urls: List[str],
-    per_source_limit: int = PER_SOURCE_ARTICLE_LIMIT,
-) -> List[Tuple[str, str]]:
-    """
-    從 lm3790（/cang/jg*.html）與 lm2992（/cang/xw*.html）分別配額擷取行情連結，
-    確保文革、特種、J字、T字、年冊與生肖系列皆不會互相排擠遺漏。
-    """
+# ==========================================
+# 資料源 A：金投收藏網 (m.cngold.org)
+# ==========================================
+
+def _extract_cngold_title(soup: BeautifulSoup, fallback: str) -> str:
+    for h1 in soup.find_all("h1"):
+        txt = h1.get_text(" ", strip=True)
+        if txt and "金投网" not in txt and len(txt) > 6:
+            return txt
+    if soup.title and soup.title.string:
+        return soup.title.string.strip()
+    return fallback
+
+
+def scrape_site_a(session: requests.Session, per_source_limit: int = 8) -> Tuple[List[Dict[str, Any]], int]:
+    """爬取資料源 A：金投收藏網 lm3790（文/特/J/T/年冊）與 lm2992（生肖）。"""
     seen_urls = set()
     articles: List[Tuple[str, str]] = []
 
-    for idx, list_url in enumerate(list_urls):
+    for idx, list_url in enumerate(CNGOLD_LIST_URLS):
         if idx > 0:
             _polite_sleep()
-
-        html = _fetch_html(session, list_url)
+        html = _fetch_html(session, list_url, referer="https://m.cngold.org/cang/")
         if not html:
             continue
 
@@ -366,20 +492,15 @@ def _collect_article_links(
         try:
             soup = BeautifulSoup(html, "html.parser")
             for a_tag in soup.find_all("a", href=True):
-                href = a_tag["href"].strip()
-                full_url = urljoin(list_url, href)
+                full_url = urljoin(list_url, a_tag["href"].strip())
                 parsed = urlparse(full_url)
-
                 if not parsed.netloc.endswith("cngold.org"):
                     continue
-                # 同時支援 lm3790 的 /cang/jg*.html 與 lm2992 的 /cang/xw*.html
                 if not re.search(r"/cang/(?:xw|jg)\d+\.html$", parsed.path):
                     continue
 
                 title = a_tag.get("title") or a_tag.get_text(" ", strip=True)
-                if "邮票" not in title:
-                    continue
-                if not any(k in title for k in ("价格", "行情", "报价", "收价")):
+                if "邮票" not in title or not any(k in title for k in ("价格", "行情", "报价", "收价")):
                     continue
                 if full_url in seen_urls:
                     continue
@@ -390,82 +511,214 @@ def _collect_article_links(
                 if source_count >= per_source_limit:
                     break
         except Exception as exc:
-            logger.error("解析列表頁失敗 [%s]: %s", list_url, exc)
+            logger.error("[Site A] 解析列表失敗 [%s]: %s", list_url, exc)
 
-    return articles
+    records: List[Dict[str, Any]] = []
+    processed = 0
+    for url, list_title in articles:
+        _polite_sleep()
+        html = _fetch_html(session, url, referer="https://m.cngold.org/cang/")
+        if not html:
+            continue
+
+        try:
+            soup = BeautifulSoup(html, "html.parser")
+            article_title = _extract_cngold_title(soup, list_title)
+            combined = f"{article_title} {list_title}"
+            category = _detect_category(combined)
+            record_date = _extract_record_date(combined)
+
+            page_rows: List[Dict[str, Any]] = []
+            for tbl in soup.find_all("table"):
+                page_rows.extend(_parse_table(tbl, "site_a", category, record_date))
+
+            logger.info("[Site A] %s -> 分類:[%s] 日期:[%s] %d 筆", article_title[:24], category, record_date, len(page_rows))
+            records.extend(page_rows)
+            processed += 1
+        except Exception as exc:
+            logger.warning("[Site A] 解析異常已跳過 [%s]: %s", url, exc)
+
+    return records, processed
 
 
 # ==========================================
-# Smart Diff 合併與加密寫出
+# 資料源 B：點購收藏網 (www.5151sc.com)
 # ==========================================
 
-def apply_smart_diff(
+def scrape_site_b(session: requests.Session, max_pages: int = 10) -> Tuple[List[Dict[str, Any]], int]:
+    """爬取資料源 B：點購收藏網 shougou.html 及紀念、特種、文革、J/T、生肖、編號等子頁面。"""
+    index_html = _fetch_html(session, SC5151_INDEX_URL, referer="http://www.5151sc.com/")
+    if not index_html:
+        return [], 0
+
+    include_kw = (
+        "纪念邮票", "特种邮票", "文革邮票", "J字邮票", "T字邮票",
+        "十二生肖", "三轮生肖", "二轮生肖", "编号邮票", "年册",
+    )
+    exclude_kw = ("纸币", "人民币", "金银", "银元", "硬币", "磁卡", "IC卡", "章程", "资讯", "视频")
+
+    seen_urls = set()
+    subpages: List[Tuple[str, str]] = []
+    try:
+        soup = BeautifulSoup(index_html, "html.parser")
+        for a_tag in soup.find_all("a", href=True):
+            full_url = urljoin(SC5151_INDEX_URL, a_tag["href"].strip())
+            parsed = urlparse(full_url)
+            if not parsed.netloc.endswith("5151sc.com"):
+                continue
+            if not parsed.path.endswith(".html") or parsed.path == "/shougou.html":
+                continue
+
+            link_text = a_tag.get_text(" ", strip=True)
+            if any(ex in link_text for ex in exclude_kw):
+                continue
+            if not any(inc in link_text for inc in include_kw):
+                continue
+            if full_url in seen_urls:
+                continue
+
+            seen_urls.add(full_url)
+            subpages.append((full_url, link_text))
+            if len(subpages) >= max_pages:
+                break
+    except Exception as exc:
+        logger.error("[Site B] 解析首頁失敗: %s", exc)
+        return [], 0
+
+    records: List[Dict[str, Any]] = []
+    processed = 0
+    for url, link_title in subpages:
+        _polite_sleep()
+        html = _fetch_html(session, url, referer=SC5151_INDEX_URL)
+        if not html:
+            continue
+
+        try:
+            soup = BeautifulSoup(html, "html.parser")
+            h1 = soup.find("h1")
+            page_title = h1.get_text(" ", strip=True) if h1 else (soup.title.string.strip() if soup.title and soup.title.string else link_title)
+            body_text = soup.get_text(" ", strip=True)[:1200]
+
+            category = _detect_category(f"{page_title} {link_title}")
+            record_date = _extract_record_date(f"{page_title} {body_text}")
+
+            page_rows: List[Dict[str, Any]] = []
+            for tbl in soup.find_all("table"):
+                page_rows.extend(_parse_table(tbl, "site_b", category, record_date))
+
+            logger.info("[Site B] %s -> 分類:[%s] 日期:[%s] %d 筆", page_title[:24], category, record_date, len(page_rows))
+            records.extend(page_rows)
+            processed += 1
+        except Exception as exc:
+            logger.warning("[Site B] 解析異常已跳過 [%s]: %s", url, exc)
+
+    return records, processed
+
+
+# ==========================================
+# 跨站合併與 Smart Diff 寫入
+# ==========================================
+
+def apply_dual_source_smart_diff(
     store: Dict[str, Any],
-    scraped_records: List[Dict[str, Any]],
+    all_records: List[Dict[str, Any]],
     checked_at: str,
 ) -> Tuple[int, int]:
+    """
+    先依 (canon_id, date) 聚合雙站同日價格，再與最新歷史比對：
+    任一來源或品相價格變動才寫入歷史紀錄，並繼承未更新站點的既有最新價格避免斷線。
+    """
     stamps_map: Dict[str, Any] = store.setdefault("stamps", {})
-    appended_count = 0
-    checked_count = 0
 
-    ordered_records = sorted(scraped_records, key=lambda r: r["date"])
+    # 依實體主鍵與日期分組
+    grouped: Dict[str, Dict[str, Dict[str, Any]]] = {}
+    meta_by_id: Dict[str, Dict[str, str]] = {}
 
-    for rec in ordered_records:
-        key = f"{rec['category']}::{rec['code']}::{rec['name']}"
-        entry = stamps_map.get(key)
-
-        if entry is None:
-            entry = {
-                "id": key,
+    for rec in all_records:
+        cid = rec["id"]
+        dt = rec["date"]
+        if cid not in meta_by_id or len(rec["name"]) > len(meta_by_id[cid]["name"]):
+            meta_by_id[cid] = {
                 "code": rec["code"],
                 "name": rec["name"],
                 "category": rec["category"],
+            }
+
+        bucket = grouped.setdefault(cid, {}).setdefault(
+            dt,
+            {
+                "site_a_seen": False,
+                "site_b_seen": False,
+                "site_a_mint": None,
+                "site_a_cto": None,
+                "site_a_used": None,
+                "site_b_mint": None,
+                "site_b_cto": None,
+                "site_b_used": None,
+            },
+        )
+        prefix = rec["site"]
+        bucket[f"{prefix}_seen"] = True
+        for cond in ("mint", "cto", "used"):
+            if rec[cond] is not None:
+                bucket[f"{prefix}_{cond}"] = rec[cond]
+
+    appended = 0
+    for cid, date_map in grouped.items():
+        meta = meta_by_id[cid]
+        entry = stamps_map.get(cid)
+        if entry is None:
+            entry = {
+                "id": cid,
+                "code": meta["code"],
+                "name": meta["name"],
+                "category": meta["category"],
                 "last_checked": checked_at,
                 "history": [],
             }
-            stamps_map[key] = entry
-
-        entry["last_checked"] = checked_at
-        checked_count += 1
+            stamps_map[cid] = entry
+        else:
+            # 保留較完整名稱
+            if len(meta["name"]) > len(entry.get("name", "")):
+                entry["name"] = meta["name"]
+            entry["last_checked"] = checked_at
 
         history: List[Dict[str, Any]] = entry["history"]
-        new_prices = (rec["mint"], rec["cto"], rec["used"])
+        for dt in sorted(date_map.keys()):
+            day_data = date_map[dt]
+            last_point = history[-1] if history else None
 
-        if not history:
-            history.append(
-                {
-                    "date": rec["date"],
-                    "ts": checked_at,
-                    "mint": rec["mint"],
-                    "cto": rec["cto"],
-                    "used": rec["used"],
-                }
-            )
-            appended_count += 1
-            continue
+            if last_point and dt < last_point["date"]:
+                continue
 
-        last_point = history[-1]
-        if rec["date"] < last_point["date"]:
-            continue
+            new_point = {"date": dt, "ts": checked_at}
+            for site in ("site_a", "site_b"):
+                seen = day_data[f"{site}_seen"]
+                for cond in ("mint", "cto", "used"):
+                    field = f"{site}_{cond}"
+                    if seen:
+                        new_point[field] = day_data[field]
+                    else:
+                        new_point[field] = last_point.get(field) if last_point else None
 
-        last_prices = (last_point.get("mint"), last_point.get("cto"), last_point.get("used"))
-        if new_prices != last_prices:
-            history.append(
-                {
-                    "date": rec["date"],
-                    "ts": checked_at,
-                    "mint": rec["mint"],
-                    "cto": rec["cto"],
-                    "used": rec["used"],
-                }
-            )
-            appended_count += 1
+            if not last_point:
+                history.append(new_point)
+                appended += 1
+            else:
+                changed = any(new_point[f] != last_point.get(f) for f in PRICE_FIELDS)
+                if changed:
+                    if dt == last_point["date"]:
+                        # 同日補齊另一來源或同日價格修正，直接更新同日快照
+                        last_point.update(new_point)
+                    else:
+                        history.append(new_point)
+                    appended += 1
 
     store["last_checked"] = checked_at
-    if appended_count > 0 or not store.get("updated_at"):
+    if appended > 0 or not store.get("updated_at"):
         store["updated_at"] = checked_at
 
-    return appended_count, checked_count
+    return appended, len(grouped)
 
 
 def main() -> None:
@@ -475,56 +728,31 @@ def main() -> None:
 
     store = load_existing_store(password)
     checked_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    all_records: List[Dict[str, Any]] = []
-    processed = 0
 
     with requests.Session() as session:
-        article_links = _collect_article_links(session, TARGET_URLS)
-        logger.info("共探索到 %d 篇郵票行情文章。", len(article_links))
+        rec_a, proc_a = scrape_site_a(session, per_source_limit=8)
+        _polite_sleep()
+        rec_b, proc_b = scrape_site_b(session, max_pages=10)
 
-        for url, list_title in article_links:
-            _polite_sleep()
-            html = _fetch_html(session, url)
-            if not html:
-                continue
+    all_records = rec_a + rec_b
+    logger.info(
+        "雙站擷取摘要 -> Site A: %d 頁 / %d 筆；Site B: %d 頁 / %d 筆",
+        proc_a, len(rec_a), proc_b, len(rec_b),
+    )
 
-            try:
-                soup = BeautifulSoup(html, "html.parser")
-                article_title = _extract_article_title(soup, list_title)
-                combined_title = f"{article_title} {list_title}"
-
-                category = _detect_category(combined_title)
-                record_date = _extract_record_date(combined_title)
-
-                page_records: List[Dict[str, Any]] = []
-                for tbl in soup.find_all("table"):
-                    page_records.extend(_parse_table(tbl, category, record_date))
-
-                logger.info(
-                    "文章 [%s] -> 分類:[%s] 日期:[%s] 解析得 %d 筆",
-                    article_title[:28],
-                    category,
-                    record_date,
-                    len(page_records),
-                )
-                all_records.extend(page_records)
-                processed += 1
-            except Exception as exc:
-                logger.exception("解析文章異常，已安全跳過 [%s]: %s", url, exc)
-
-    if processed == 0 or not all_records:
-        logger.warning("本次未成功擷取任何有效報價（processed=%d），保留既有加密檔不覆寫。", processed)
+    if not all_records:
+        logger.warning("本次雙站皆未取得有效報價，保留既有加密檔不覆寫。")
         return
 
-    appended, checked = apply_smart_diff(store, all_records, checked_at)
+    appended, merged_count = apply_dual_source_smart_diff(store, all_records, checked_at)
     encrypted_output = encrypt_json_payload(store, password)
 
     DATA_ENC_PATH.parent.mkdir(parents=True, exist_ok=True)
     DATA_ENC_PATH.write_text(encrypted_output, encoding="utf-8")
 
     logger.info(
-        "完成！檢查 %d 筆郵票，新增 %d 筆價格變動紀錄，已 AES-GCM 加密輸出至 %s",
-        checked,
+        "去重合併完成！共 %d 款獨立郵票，新增/更新 %d 筆價格變動紀錄，已加密輸出至 %s",
+        merged_count,
         appended,
         DATA_ENC_PATH,
     )
