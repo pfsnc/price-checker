@@ -1,12 +1,14 @@
 import base64
 import json
 import logging
+import math
 import os
 import random
 import re
+import tempfile
 import time
 import unicodedata
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urljoin, urlparse
@@ -26,7 +28,18 @@ logger = logging.getLogger("dual_source_stamp_scraper")
 BASE_DIR = Path(__file__).resolve().parent
 DATA_ENC_PATH = BASE_DIR / "docs" / "data.enc"
 
-# 資料源 A（金投收藏網：郵票交易報價 lm3790 含特種/文革/J/T/年冊，lm2992 含生肖）
+# ==========================================
+# 集中管理：來源白名單、傳輸限制與資料閾值（可安全調整）
+# ==========================================
+
+# 主機白名單僅能防止 SSRF／惡意轉址，無法防範網域過期搶註或 HTTP 明文竄改。
+# 點購網目前僅提供 HTTP，其回應內容一律視為不可信輸入，須通過嚴格驗證與 Sanity Check。
+ALLOWED_HOST_POLICIES: Dict[str, Tuple[str, ...]] = {
+    "m.cngold.org": ("https",),
+    "www.5151sc.com": ("http", "https"),
+}
+ACTIVE_SITES = ("site_a", "site_b")
+
 CNGOLD_URLS = [
     "https://m.cngold.org/cang/lm3790/",
     "https://m.cngold.org/cang/lm2992/",
@@ -44,6 +57,27 @@ HEADERS = {
 }
 
 REQUEST_TIMEOUT = 15
+MAX_REDIRECTS = 5
+MAX_RESPONSE_BYTES = 5 * 1024 * 1024  # 單頁回應上限 5 MB
+ALLOWED_CONTENT_TYPES = ("text/html", "application/xhtml+xml")
+
+MIN_VALID_DATE = "2020-01-01"
+MAX_FUTURE_DAYS = 1
+MAX_PRICE_YUAN = 50_000_000.0  # 單筆報價合理上限（5000 萬元）
+MAX_RECORDS_PER_PAGE = 1_000
+MAX_RECORDS_PER_RUN = 5_000
+
+# ==========================================
+# Fail-Closed 資料合理性檢查 (Sanity Check) 門檻（全來源適用）
+# 註：正常市場價格劇烈波動不予攔截，僅檢查結構與來源完整性。
+# ==========================================
+MIN_STAMPS_FOR_COUNT_CHECK = 20     # 既有品種數達此門檻才啟用比例檢查
+MAX_STAMP_DROP_RATIO = 0.40         # 單一來源或總體覆蓋率減少超過 40% 視為異常或改版
+MAX_STAMP_GROWTH_RATIO = 2.00       # 新增品種超過既有總數 200% 視為誤抓雜訊
+MIN_FIELD_COUNT_FOR_RETENTION = 10  # 某來源某品相既有報價數達此門檻才檢查保留率
+MIN_PRICE_RETENTION_RATIO = 0.70    # 有效價格保留率低於 70% 視為欄位解析失效
+MAX_SAME_STAMP_DUPES_PER_SITE = 3   # 單站單一郵票同輪抓取重複上限
+
 PBKDF2_ITERATIONS = 100_000
 PRICE_FIELDS = (
     "site_a_mint",
@@ -54,7 +88,6 @@ PRICE_FIELDS = (
     "site_b_used",
 )
 
-# JT 時期小本票 (SB1~SB18) 對應原套票志號與分類，讓同套郵票不同體裁可聚在 J / T 分類比對
 SB_TO_JT_MAP: Dict[str, Tuple[str, str]] = {
     "SB1": ("T", "T51"),
     "SB2": ("T", "T57"),
@@ -94,8 +127,161 @@ CN_NUM_MAP = {
 }
 
 
+class UnsafeUrlError(ValueError):
+    """URL 不符合主機白名單或安全傳輸政策。"""
+
+
+class SanityCheckError(RuntimeError):
+    """抓取結果未通過資料合理性檢查（觸發 Fail-Closed）。"""
+
+
 # ==========================================
-# 加密 / 解密模組 (PBKDF2-SHA256 + AES-256-GCM)
+# URL 驗證與安全 HTTP 回應讀取
+# ==========================================
+
+def validate_url(url: str) -> str:
+    if not url or not isinstance(url, str):
+        raise UnsafeUrlError("空白或無效的 URL")
+
+    cleaned = url.strip()
+    parsed = urlparse(cleaned)
+    scheme = (parsed.scheme or "").lower()
+    hostname = (parsed.hostname or "").lower()
+
+    if not hostname or hostname not in ALLOWED_HOST_POLICIES:
+        raise UnsafeUrlError(f"主機不在白名單內: {hostname!r}")
+    if scheme not in ALLOWED_HOST_POLICIES[hostname]:
+        raise UnsafeUrlError(f"主機 {hostname!r} 不允許使用協定 {scheme!r}")
+    if parsed.username is not None or parsed.password is not None:
+        raise UnsafeUrlError("URL 禁止包含認證資訊")
+    if parsed.port not in (None, 80, 443):
+        raise UnsafeUrlError(f"不允許的非標準連接埠: {parsed.port!r}")
+
+    return cleaned
+
+
+def _decode_html_bytes(raw_bytes: bytes, content_type: str) -> str:
+    charset = None
+    m_ct = re.search(r"charset=([a-zA-Z0-9_\-]+)", content_type, re.IGNORECASE)
+    if m_ct:
+        charset = m_ct.group(1).strip().lower()
+    if not charset:
+        m_meta = re.search(br"charset=['\"]?([a-zA-Z0-9_\-]+)", raw_bytes[:4096], re.IGNORECASE)
+        if m_meta:
+            charset = m_meta.group(1).decode("ascii", errors="ignore").lower()
+    if charset in ("gb2312", "gbk"):
+        charset = "gb18030"
+
+    candidates = [charset] if charset else []
+    for enc in ("utf-8", "gb18030"):
+        if enc not in candidates:
+            candidates.append(enc)
+
+    for enc in candidates:
+        try:
+            return raw_bytes.decode(enc)
+        except (UnicodeDecodeError, LookupError):
+            continue
+    return raw_bytes.decode("utf-8", errors="replace")
+
+
+def _polite_sleep() -> None:
+    """強制請求間隔 2 至 3 秒，防止對目標伺服器造成負擔。"""
+    time.sleep(random.uniform(2.0, 3.0))
+
+
+def _fetch_html(session: requests.Session, url: str, referer: str = "") -> Optional[str]:
+    """手動驗證每一次轉址與回應標頭／內容上限，不跟隨至非白名單網域。"""
+    try:
+        current_url = validate_url(url)
+    except UnsafeUrlError as exc:
+        logger.warning("已拒絕不安全 URL [%s]: %s", url, exc)
+        return None
+
+    req_headers = dict(HEADERS)
+    if referer:
+        try:
+            req_headers["Referer"] = validate_url(referer)
+        except UnsafeUrlError:
+            pass
+
+    for _ in range(MAX_REDIRECTS + 1):
+        try:
+            resp = session.get(
+                current_url,
+                headers=req_headers,
+                timeout=REQUEST_TIMEOUT,
+                allow_redirects=False,
+                stream=True,
+            )
+        except requests.RequestException as exc:
+            logger.warning("請求失敗，已安全跳過 [%s]: %s", current_url, type(exc).__name__)
+            return None
+
+        try:
+            if resp.status_code in (301, 302, 303, 307, 308):
+                loc = (resp.headers.get("Location") or "").strip()
+                if not loc:
+                    logger.warning("轉址缺少 Location 標頭 [%s]", current_url)
+                    return None
+                next_url = urljoin(current_url, loc)
+                try:
+                    current_url = validate_url(next_url)
+                except UnsafeUrlError as exc:
+                    logger.warning("已拒絕不安全轉址目標 [%s -> %s]: %s", current_url, next_url, exc)
+                    return None
+                continue
+
+            if resp.status_code != 200:
+                logger.warning("HTTP 狀態碼異常 [%s]: %d", current_url, resp.status_code)
+                return None
+
+            ctype = (resp.headers.get("Content-Type") or "").lower()
+            if not any(allowed in ctype for allowed in ALLOWED_CONTENT_TYPES):
+                logger.warning("拒絕非 HTML Content-Type [%s]: %r", current_url, ctype)
+                return None
+
+            clen = resp.headers.get("Content-Length")
+            if clen is not None:
+                try:
+                    if int(clen) < 0 or int(clen) > MAX_RESPONSE_BYTES:
+                        logger.warning("拒絕過大 Content-Length [%s]: %s", current_url, clen)
+                        return None
+                except ValueError:
+                    logger.warning("Content-Length 格式異常 [%s]", current_url)
+                    return None
+
+            chunks: List[bytes] = []
+            total_bytes = 0
+            for chunk in resp.iter_content(chunk_size=65536):
+                if not chunk:
+                    continue
+                total_bytes += len(chunk)
+                if total_bytes > MAX_RESPONSE_BYTES:
+                    logger.warning("串流回應超過 %d bytes 上限，已中止 [%s]", MAX_RESPONSE_BYTES, current_url)
+                    return None
+                chunks.append(chunk)
+
+            raw_bytes = b"".join(chunks)
+            if not raw_bytes.strip():
+                logger.warning("收到空白回應 [%s]", current_url)
+                return None
+
+            text = _decode_html_bytes(raw_bytes, ctype)
+            if not re.search(r"<(?:!doctype\s+html|html|body|table)\b", text[:8192], re.IGNORECASE):
+                logger.warning("回應缺少基本 HTML 結構 [%s]", current_url)
+                return None
+
+            return text
+        finally:
+            resp.close()
+
+    logger.warning("轉址次數超過上限 (%d) [%s]", MAX_REDIRECTS, url)
+    return None
+
+
+# ==========================================
+# 加密 / 解密模組與原子寫入
 # ==========================================
 
 def _derive_aes_key(password: str, salt: bytes, iterations: int) -> bytes:
@@ -139,8 +325,28 @@ def decrypt_json_payload(raw_text: str, password: str) -> Dict[str, Any]:
     return json.loads(plaintext.decode("utf-8"))
 
 
+def atomic_write_text(target_path: Path, content: str) -> None:
+    """以同目錄暫存檔 + fsync + os.replace 原子替換目標檔案，防止寫入中斷毀損。"""
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(
+        prefix=f".{target_path.name}.",
+        suffix=".tmp",
+        dir=str(target_path.parent),
+    )
+    tmp_path = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(str(tmp_path), str(target_path))
+    except Exception:
+        tmp_path.unlink(missing_ok=True)
+        raise
+
+
 # ==========================================
-# 志號、分類與體裁解析 (parse_catalog_and_category)
+# 志號、分類與體裁解析
 # ==========================================
 
 def _nfkc(text: str) -> str:
@@ -258,16 +464,9 @@ def parse_catalog_and_category(
     page_category: str,
     special_type: str = "",
 ) -> Tuple[str, str, str, str]:
-    """
-    核心志號與分類解析器：
-    1. 屬於 J / T 系列的小型張（如 J25、T28）與小本票（SB1~SB18）統一歸類回 J 與 T。
-    2. 非 JT 系列的小型張（如 C33、S61）、編年小本票（SB19+）與普航欠改維持「其他」。
-    3. 確保「文」系列志號與分類正確解析，回傳 (canon_id, category, code, name)。
-    """
     code, name = _normalize_raw_code_and_name(raw_code, raw_name)
     row_cat = page_category
 
-    # 先檢查是否為 JT 系列小型張 / 小本票
     if special_type == "小型张" or "小型张" in name or "小全张" in name:
         m_jt = re.match(r"^([JT]\d+)M?$", code, re.IGNORECASE)
         if m_jt:
@@ -310,11 +509,6 @@ def parse_catalog_and_category(
 
 
 def _migrate_existing_store(store: Dict[str, Any]) -> None:
-    """
-    自動遷移舊版資料：
-    - 重新套用 parse_catalog_and_category，把已存在的 JT 小型張／小本票歸類回 J / T。
-    - 清除先前誤抓的歷史背景年份（< 2020 年，例如 1949-10-08）髒日期紀錄。
-    """
     old_stamps = store.get("stamps", {})
     migrated: Dict[str, Any] = {}
 
@@ -339,8 +533,7 @@ def _migrate_existing_store(store: Dict[str, Any]) -> None:
         converted_hist: List[Dict[str, Any]] = []
         for h in entry.get("history", []):
             dt = str(h.get("date", ""))
-            # 過濾早期誤抓内文背景年份（如 1949-10-08）之無效日期
-            if not dt or dt < "2020-01-01":
+            if not dt or dt < MIN_VALID_DATE:
                 continue
             if "site_a_mint" in h or "site_b_mint" in h:
                 point = {"date": dt, "ts": h.get("ts", ""), **{f: h.get(f) for f in PRICE_FIELDS}}
@@ -397,79 +590,68 @@ def load_existing_store(password: str) -> Dict[str, Any]:
         return store
     except Exception as exc:
         raise RuntimeError(
-            f"無法解密現有 {DATA_ENC_PATH}（請確認 ENCRYPT_PASSWORD 是否與先前一致）: {exc}"
+            f"無法解密現有 {DATA_ENC_PATH}（請確認 ENCRYPT_PASSWORD 是否正確）: {type(exc).__name__}"
         ) from exc
 
 
 # ==========================================
-# 共用 HTTP 與日期 / 表格解析引擎
+# 日期、價格與 HTML 表格解析
 # ==========================================
 
-def _polite_sleep() -> None:
-    """強制請求間隔 2 至 3 秒，防止對目標伺服器造成負擔。"""
-    time.sleep(random.uniform(2.0, 3.0))
-
-
-def _fetch_html(session: requests.Session, url: str, referer: str = "") -> Optional[str]:
-    req_headers = dict(HEADERS)
-    if referer:
-        req_headers["Referer"] = referer
+def _is_valid_calendar_date(y: int, m: int, d: int, today: Optional[datetime] = None) -> Optional[str]:
+    now_dt = today or datetime.now()
     try:
-        resp = session.get(url, headers=req_headers, timeout=REQUEST_TIMEOUT)
-        resp.raise_for_status()
-        enc = resp.apparent_encoding or "utf-8"
-        if enc.lower() in ("gb2312", "gbk"):
-            enc = "gb18030"
-        resp.encoding = enc
-        return resp.text
-    except requests.RequestException as exc:
-        logger.warning("請求失敗，已安全跳過 [%s]: %s", url, exc)
+        dt = datetime(y, m, d)
+    except ValueError:
         return None
+    date_str = dt.strftime("%Y-%m-%d")
+    max_allowed = (now_dt + timedelta(days=MAX_FUTURE_DAYS)).strftime("%Y-%m-%d")
+    if date_str < MIN_VALID_DATE or date_str > max_allowed:
+        return None
+    return date_str
 
 
-def _extract_publish_date(soup: BeautifulSoup, title_text: str) -> str:
-    """
-    精準擷取「更新日」，嚴禁誤抓內文歷史背景年份（如 1949 年）：
-    1. 優先搜尋頁面明確的「发布时间：YYYY-MM-DD / YYYY-M-D」或「更新时间：...」。
-    2. 其次檢查文章標題中的（YYYY年M月D日）且年份須 >= 2020。
-    3. 皆無則使用當日日期。
-    """
-    # 先檢查常見發布時間標籤或全文前段明確欄位
+def _extract_publish_date(soup: BeautifulSoup, title_text: str, today: Optional[datetime] = None) -> str:
     page_text = _nfkc(soup.get_text(" ", strip=True))
     m_pub = re.search(
         r"(?:发布时间|更新时间|发布日期)\s*[：:]\s*(\d{4})\s*[-/年]\s*(\d{1,2})\s*[-/月]\s*(\d{1,2})\s*日?",
         page_text,
     )
     if m_pub:
-        y, m, d = int(m_pub.group(1)), int(m_pub.group(2)), int(m_pub.group(3))
-        if 2020 <= y <= 2100 and 1 <= m <= 12 and 1 <= d <= 31:
-            return f"{y:04d}-{m:02d}-{d:02d}"
+        valid = _is_valid_calendar_date(int(m_pub.group(1)), int(m_pub.group(2)), int(m_pub.group(3)), today=today)
+        if valid:
+            return valid
 
-    # 檢查 HTML meta 發布時間
     for meta in soup.find_all("meta"):
         prop = (meta.get("property") or meta.get("name") or "").lower()
         if prop in ("article:published_time", "og:release_date", "pubdate", "publishdate"):
             content = (meta.get("content") or "").strip()
             m_meta = re.search(r"(\d{4})-(\d{1,2})-(\d{1,2})", content)
             if m_meta:
-                y, m, d = int(m_meta.group(1)), int(m_meta.group(2)), int(m_meta.group(3))
-                if 2020 <= y <= 2100:
-                    return f"{y:04d}-{m:02d}-{d:02d}"
+                valid = _is_valid_calendar_date(
+                    int(m_meta.group(1)), int(m_meta.group(2)), int(m_meta.group(3)), today=today
+                )
+                if valid:
+                    return valid
 
-    # 僅在標題本身（不含內文介紹）比對 YYYY年M月D日 / YYYY-M-D
     clean_title = _nfkc(title_text)
     m_title = re.search(r"(\d{4})\s*[年\-/]\s*(\d{1,2})\s*[月\-/]\s*(\d{1,2})\s*日?", clean_title)
     if m_title:
-        y, m, d = int(m_title.group(1)), int(m_title.group(2)), int(m_title.group(3))
-        if 2020 <= y <= 2100 and 1 <= m <= 12 and 1 <= d <= 31:
-            return f"{y:04d}-{m:02d}-{d:02d}"
+        valid = _is_valid_calendar_date(
+            int(m_title.group(1)), int(m_title.group(2)), int(m_title.group(3)), today=today
+        )
+        if valid:
+            return valid
 
-    return datetime.now().strftime("%Y-%m-%d")
+    return (today or datetime.now()).strftime("%Y-%m-%d")
 
 
 def _parse_price(raw_text: str) -> Optional[float]:
     text = _nfkc(raw_text)
     if not text or all(ch in "-—/\\暂无待定议价电 " for ch in text):
+        return None
+    if re.match(r"^[+-]?\s*-\s*\d|^-\s*\d", text):
+        logger.warning("忽略負數價格字串: %r", text[:32])
         return None
 
     multiplier = 10000.0 if "万" in text else 1.0
@@ -480,6 +662,9 @@ def _parse_price(raw_text: str) -> Optional[float]:
     try:
         values = [float(n) * multiplier for n in nums[:2]]
         price = sum(values) / len(values) if "-" in text and len(values) == 2 else values[0]
+        if not math.isfinite(price) or price < 0 or price > MAX_PRICE_YUAN:
+            logger.warning("忽略超出合理範圍之價格: %r", text[:32])
+            return None
         return round(price, 2)
     except ValueError:
         return None
@@ -611,12 +796,14 @@ def _parse_table(
                     "date": record_date,
                 }
             )
+            if len(results) >= MAX_RECORDS_PER_PAGE:
+                return results
 
     return results
 
 
 # ==========================================
-# 資料源 A：金投收藏網 (m.cngold.org)
+# 資料源 A 與 B 爬蟲
 # ==========================================
 
 def _extract_cngold_title(soup: BeautifulSoup, fallback: str) -> str:
@@ -630,7 +817,6 @@ def _extract_cngold_title(soup: BeautifulSoup, fallback: str) -> str:
 
 
 def scrape_site_a(session: requests.Session, per_source_limit: int = 10) -> Tuple[List[Dict[str, Any]], int]:
-    """爬取資料源 A：金投收藏網 lm3790（含特種/文革/J字/T字/年冊）與 lm2992（生肖）。"""
     seen_urls = set()
     articles: List[Tuple[str, str]] = []
 
@@ -646,10 +832,11 @@ def scrape_site_a(session: requests.Session, per_source_limit: int = 10) -> Tupl
             soup = BeautifulSoup(html, "html.parser")
             for a_tag in soup.find_all("a", href=True):
                 full_url = urljoin(list_url, a_tag["href"].strip())
-                parsed = urlparse(full_url)
-                if not parsed.netloc.endswith("cngold.org"):
+                try:
+                    validate_url(full_url)
+                except UnsafeUrlError:
                     continue
-                # 支援 /cang/xw*.html、/cang/jg*.html、/cang/c*.html 等所有行情文章網址
+                parsed = urlparse(full_url)
                 if not re.search(r"/cang/[a-z]+\d+\.html$", parsed.path):
                     continue
 
@@ -665,7 +852,7 @@ def scrape_site_a(session: requests.Session, per_source_limit: int = 10) -> Tupl
                 if source_count >= per_source_limit:
                     break
         except Exception as exc:
-            logger.error("[Site A] 解析列表失敗 [%s]: %s", list_url, exc)
+            logger.error("[Site A] 解析列表失敗 [%s]: %s", list_url, type(exc).__name__)
 
     records: List[Dict[str, Any]] = []
     processed = 0
@@ -690,20 +877,12 @@ def scrape_site_a(session: requests.Session, per_source_limit: int = 10) -> Tupl
             records.extend(page_rows)
             processed += 1
         except Exception as exc:
-            logger.warning("[Site A] 解析異常已跳過 [%s]: %s", url, exc)
+            logger.warning("[Site A] 解析異常已跳過 [%s]: %s", url, type(exc).__name__)
 
     return records, processed
 
 
-# ==========================================
-# 資料源 B：點購收藏網 (www.5151sc.com)
-# ==========================================
-
 def scrape_site_b(session: requests.Session, max_pages: int = 20) -> Tuple[List[Dict[str, Any]], int]:
-    """
-    爬取資料源 B：點購收藏網 shougou.html 及其全系列子頁面：
-    紀念、特種、文革、編號、J 字、T 字、生肖、年冊，以及小型張、小本票、普航欠改。
-    """
     index_html = _fetch_html(session, SC5151_INDEX_URL, referer="http://www.5151sc.com/")
     if not index_html:
         return [], 0
@@ -722,9 +901,11 @@ def scrape_site_b(session: requests.Session, max_pages: int = 20) -> Tuple[List[
         soup = BeautifulSoup(index_html, "html.parser")
         for a_tag in soup.find_all("a", href=True):
             full_url = urljoin(SC5151_INDEX_URL, a_tag["href"].strip())
-            parsed = urlparse(full_url)
-            if not parsed.netloc.endswith("5151sc.com"):
+            try:
+                validate_url(full_url)
+            except UnsafeUrlError:
                 continue
+            parsed = urlparse(full_url)
             if not parsed.path.endswith(".html") or parsed.path == "/shougou.html":
                 continue
 
@@ -741,7 +922,7 @@ def scrape_site_b(session: requests.Session, max_pages: int = 20) -> Tuple[List[
             if len(subpages) >= max_pages:
                 break
     except Exception as exc:
-        logger.error("[Site B] 解析首頁失敗: %s", exc)
+        logger.error("[Site B] 解析首頁失敗: %s", type(exc).__name__)
         return [], 0
 
     records: List[Dict[str, Any]] = []
@@ -785,14 +966,126 @@ def scrape_site_b(session: requests.Session, max_pages: int = 20) -> Tuple[List[
             records.extend(page_rows)
             processed += 1
         except Exception as exc:
-            logger.warning("[Site B] 解析異常已跳過 [%s]: %s", url, exc)
+            logger.warning("[Site B] 解析異常已跳過 [%s]: %s", url, type(exc).__name__)
 
     return records, processed
 
 
 # ==========================================
-# 跨站合併與 Smart Diff 寫入
+# Fail-Closed 資料合理性檢查（所有來源一體適用）與寫入
 # ==========================================
+
+def run_sanity_checks(
+    existing_store: Dict[str, Any],
+    all_records: List[Dict[str, Any]],
+    today: Optional[datetime] = None,
+) -> None:
+    if not all_records:
+        raise SanityCheckError("未抓取到任何有效記錄")
+    if len(all_records) > MAX_RECORDS_PER_RUN:
+        raise SanityCheckError(f"抓取總筆數異常過大 ({len(all_records)} > {MAX_RECORDS_PER_RUN})")
+
+    now_dt = today or datetime.now()
+    max_allowed_date = (now_dt + timedelta(days=MAX_FUTURE_DAYS)).strftime("%Y-%m-%d")
+
+    dupes: Dict[Tuple[str, str], int] = {}
+    scraped_by_site: Dict[str, List[Dict[str, Any]]] = {site: [] for site in ACTIVE_SITES}
+
+    for rec in all_records:
+        dt = str(rec.get("date", ""))
+        try:
+            datetime.strptime(dt, "%Y-%m-%d")
+        except ValueError as exc:
+            raise SanityCheckError(f"無效日期格式: {dt!r}") from exc
+
+        if dt < MIN_VALID_DATE or dt > max_allowed_date:
+            raise SanityCheckError(f"日期超出合理範圍: {dt!r}（容許 {MIN_VALID_DATE} ~ {max_allowed_date}）")
+
+        for cond in ("mint", "cto", "used"):
+            p = rec.get(cond)
+            if p is not None and (
+                not isinstance(p, (int, float)) or not math.isfinite(p) or p < 0 or p > MAX_PRICE_YUAN
+            ):
+                raise SanityCheckError(f"發現異常價格數值 [{rec.get('id')}]: {p!r}")
+
+        site = rec["site"]
+        scraped_by_site.setdefault(site, []).append(rec)
+        dupe_key = (site, rec["id"])
+        dupes[dupe_key] = dupes.get(dupe_key, 0) + 1
+        if dupes[dupe_key] > MAX_SAME_STAMP_DUPES_PER_SITE:
+            raise SanityCheckError(
+                f"單站單一郵票重複過多次 [{site} / {rec['id']}]: {dupes[dupe_key]} 次"
+            )
+
+    existing_stamps = existing_store.get("stamps", {})
+
+    # 對所有來源逐一檢查：日期倒退、來源中斷、品種覆蓋率、品相欄位保留率
+    for site in ACTIVE_SITES:
+        site_recs = scraped_by_site.get(site, [])
+        site_ids = {r["id"] for r in site_recs}
+
+        prev_site_ids = {
+            sid
+            for sid, entry in existing_stamps.items()
+            if entry.get("history")
+            and any(entry["history"][-1].get(f"{site}_{c}") is not None for c in ("mint", "cto", "used"))
+        }
+
+        if len(prev_site_ids) >= MIN_STAMPS_FOR_COUNT_CHECK:
+            if not site_ids:
+                raise SanityCheckError(f"來源 {site} 本次完全無資料（既有 {len(prev_site_ids)} 款）")
+            site_drop_ratio = 1.0 - (len(prev_site_ids & site_ids) / len(prev_site_ids))
+            if site_drop_ratio > MAX_STAMP_DROP_RATIO:
+                raise SanityCheckError(
+                    f"來源 {site} 覆蓋率大幅下降（減少 {site_drop_ratio:.1%}，既有 {len(prev_site_ids)}，本次命中 {len(prev_site_ids & site_ids)}）"
+                )
+
+        if site_recs:
+            prev_dates = [
+                entry["history"][-1]["date"]
+                for entry in existing_stamps.values()
+                if entry.get("history")
+                and any(entry["history"][-1].get(f"{site}_{c}") is not None for c in ("mint", "cto", "used"))
+            ]
+            if prev_dates:
+                prev_max = max(prev_dates)
+                new_max = max(r["date"] for r in site_recs)
+                if new_max < prev_max:
+                    raise SanityCheckError(f"{site} 更新日期倒退（本次最新 {new_max} < 既有最新 {prev_max}）")
+
+        for cond in ("mint", "cto", "used"):
+            field = f"{site}_{cond}"
+            prev_field_ids = {
+                sid
+                for sid, entry in existing_stamps.items()
+                if entry.get("history") and entry["history"][-1].get(field) is not None
+            }
+            overlap = prev_field_ids & site_ids
+            if len(overlap) >= MIN_FIELD_COUNT_FOR_RETENTION:
+                retained_ids = {r["id"] for r in site_recs if r["id"] in overlap and r.get(cond) is not None}
+                retention_ratio = len(retained_ids) / len(overlap)
+                if retention_ratio < MIN_PRICE_RETENTION_RATIO:
+                    raise SanityCheckError(
+                        f"欄位 {field} 有效價格大量消失（保留率 {retention_ratio:.1%} < {MIN_PRICE_RETENTION_RATIO:.0%}）"
+                    )
+
+    if len(existing_stamps) < MIN_STAMPS_FOR_COUNT_CHECK:
+        return
+
+    existing_ids = set(existing_stamps.keys())
+    scraped_ids = {r["id"] for r in all_records}
+    drop_ratio = 1.0 - (len(existing_ids & scraped_ids) / len(existing_ids))
+    if drop_ratio > MAX_STAMP_DROP_RATIO:
+        raise SanityCheckError(
+            f"整體既有品種覆蓋率大幅下降（減少 {drop_ratio:.1%}，既有 {len(existing_ids)} 款，本次命中 {len(existing_ids & scraped_ids)} 款）"
+        )
+
+    growth_ratio = len(scraped_ids - existing_ids) / len(existing_ids)
+    if growth_ratio > MAX_STAMP_GROWTH_RATIO:
+        raise SanityCheckError(
+            f"新增品種異常暴增（+{growth_ratio:.1%}，新增 {len(scraped_ids - existing_ids)} 款）"
+        )
+
 
 def apply_dual_source_smart_diff(
     store: Dict[str, Any],
@@ -860,7 +1153,7 @@ def apply_dual_source_smart_diff(
                 continue
 
             new_point = {"date": dt, "ts": checked_at}
-            for site in ("site_a", "site_b"):
+            for site in ACTIVE_SITES:
                 seen = day_data[f"{site}_seen"]
                 for cond in ("mint", "cto", "used"):
                     field = f"{site}_{cond}"
@@ -911,14 +1204,15 @@ def main() -> None:
         logger.warning("本次雙站皆未取得有效報價，保留既有加密檔不覆寫。")
         return
 
+    # Fail-closed 檢查：任一來源結構異常即中止，絕不寫入／覆寫 docs/data.enc
+    run_sanity_checks(store, all_records)
+
     appended, merged_count = apply_dual_source_smart_diff(store, all_records, checked_at)
     encrypted_output = encrypt_json_payload(store, password)
-
-    DATA_ENC_PATH.parent.mkdir(parents=True, exist_ok=True)
-    DATA_ENC_PATH.write_text(encrypted_output, encoding="utf-8")
+    atomic_write_text(DATA_ENC_PATH, encrypted_output)
 
     logger.info(
-        "去重合併完成！共 %d 款獨立郵票，新增/更新 %d 筆價格變動紀錄，已加密輸出至 %s",
+        "去重合併完成！共 %d 款獨立郵票，新增/更新 %d 筆價格變動紀錄，已原子寫入 %s",
         merged_count,
         appended,
         DATA_ENC_PATH,
