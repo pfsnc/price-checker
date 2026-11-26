@@ -1,0 +1,11 @@
+@import "tailwindcss";
+@source "../docs/index.html";
+@source "../docs/js/app.js";
+
+@utility no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
