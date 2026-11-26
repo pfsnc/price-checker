@@ -1,6 +1,9 @@
 "use strict";
 
 const CATEGORIES = ["全部", "特", "紀", "文", "編號", "J", "T", "生肖", "年冊", "其他"];
+const CHART_RANGE_DAYS = 30;
+const UTC8_OFFSET_MS = 8 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 const SERIES_CONFIG = [
   { key: "site_a_mint", cond: "mint", label: "新票 (金投網)", color: "#047857", bg: "rgba(4, 120, 87, 0.12)", dash: [] },
@@ -21,6 +24,50 @@ const sparklineCharts = new Map();
 const expandedCharts = new Map();
 let sparkObserver = null;
 
+// ==========================================
+// 穩定日期計算（預設 UTC+8，避免瀏覽器時區偏移）
+// ==========================================
+function getUtc8TodayParts() {
+  const utc8 = new Date(Date.now() + UTC8_OFFSET_MS);
+  return {
+    year: utc8.getUTCFullYear(),
+    month: utc8.getUTCMonth() + 1,
+    day: utc8.getUTCDate(),
+  };
+}
+
+function parseYmdUtcMs(dateStr) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateStr || "").trim());
+  if (!m) return null;
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  const utcMs = Date.UTC(year, month - 1, day);
+  const check = new Date(utcMs);
+  if (
+    check.getUTCFullYear() !== year ||
+    check.getUTCMonth() + 1 !== month ||
+    check.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return utcMs;
+}
+
+function filterHistoryByDays(history, days) {
+  if (!Array.isArray(history)) return [];
+  if (!days || days <= 0) return history;
+  const { year, month, day } = getUtc8TodayParts();
+  const cutoffMs = Date.UTC(year, month - 1, day) - days * DAY_MS;
+  return history.filter((pt) => {
+    const ptMs = parseYmdUtcMs(pt?.date);
+    return ptMs !== null && ptMs >= cutoffMs;
+  });
+}
+
+// ==========================================
+// 自然排序 (Catalog Number 優先，其次 Name)
+// ==========================================
 function naturalTokenize(str) {
   return String(str || "").match(/\d+|\D+/g) || [];
 }
@@ -59,6 +106,9 @@ function compareStamps(a, b) {
   return naturalCompare(a.name, b.name);
 }
 
+// ==========================================
+// AES-256-GCM 解密
+// ==========================================
 function b64ToBytes(b64) {
   const bin = atob(b64);
   const bytes = new Uint8Array(bin.length);
@@ -194,13 +244,18 @@ function drawSparkline(canvasEl, idx) {
   const item = filteredList[idx];
   if (!item || !item.history?.length) return;
 
-  const hist = item.history.slice(-30);
-  const datasets = buildDatasets(hist, true);
-  if (!datasets.length) return;
+  // 只顯示最近 30 天日期範圍內的資料（非最後 30 筆）
+  const hist30 = filterHistoryByDays(item.history, CHART_RANGE_DAYS);
+  const datasets = buildDatasets(hist30, true);
+  if (!hist30.length || !datasets.length) {
+    const emptyEl = document.getElementById(`spark-empty-${idx}`);
+    if (emptyEl) emptyEl.classList.remove("hidden");
+    return;
+  }
 
   const chart = new window.Chart(canvasEl.getContext("2d"), {
     type: "line",
-    data: { labels: hist.map((h) => h.date), datasets },
+    data: { labels: hist30.map((h) => h.date), datasets },
     options: {
       responsive: true,
       maintainAspectRatio: false,
@@ -224,6 +279,82 @@ function drawSparkline(canvasEl, idx) {
   sparklineCharts.set(idx, chart);
 }
 
+function renderExpandedContent(idx, item, days) {
+  const fullHist = item.history || [];
+  const viewHist = filterHistoryByDays(fullHist, days);
+  const reversed = [...viewHist].reverse();
+
+  const itemHasMint = fullHist.some((h) => hasPositivePrice(h.site_a_mint) || hasPositivePrice(h.site_b_mint));
+  const itemHasCto = fullHist.some((h) => hasPositivePrice(h.site_a_cto) || hasPositivePrice(h.site_b_cto));
+  const itemHasUsed = fullHist.some((h) => hasPositivePrice(h.site_a_used) || hasPositivePrice(h.site_b_used));
+
+  // 明細表與圖表同步套用相同日期範圍
+  const tbodyEl = document.getElementById(`detail-tbody-${idx}`);
+  if (tbodyEl) {
+    if (!reversed.length) {
+      const cols = 1 + (itemHasMint ? 2 : 0) + (itemHasCto ? 2 : 0) + (itemHasUsed ? 2 : 0);
+      tbodyEl.innerHTML = `<tr><td colspan="${cols}" class="px-3 py-6 text-center text-slate-400">近 ${CHART_RANGE_DAYS} 天內無價格變動紀錄</td></tr>`;
+    } else {
+      tbodyEl.innerHTML = reversed.map((r) => `
+        <tr class="hover:bg-slate-50">
+          <td class="px-2.5 py-1.5 text-slate-700 whitespace-nowrap">${escapeHtml(r.date)}</td>
+          ${itemHasMint ? `<td class="px-2 py-1.5 text-right font-medium text-emerald-700">${fmtNum(r.site_a_mint)}</td><td class="px-2 py-1.5 text-right font-medium text-emerald-500">${fmtNum(r.site_b_mint)}</td>` : ""}
+          ${itemHasCto ? `<td class="px-2 py-1.5 text-right font-medium text-amber-700">${fmtNum(r.site_a_cto)}</td><td class="px-2 py-1.5 text-right font-medium text-amber-500">${fmtNum(r.site_b_cto)}</td>` : ""}
+          ${itemHasUsed ? `<td class="px-2 py-1.5 text-right font-medium text-rose-700">${fmtNum(r.site_a_used)}</td><td class="px-2 py-1.5 text-right font-medium text-rose-400">${fmtNum(r.site_b_used)}</td>` : ""}
+        </tr>
+      `).join("");
+    }
+  }
+
+  if (expandedCharts.has(idx)) {
+    expandedCharts.get(idx).destroy();
+    expandedCharts.delete(idx);
+  }
+
+  const emptyHint = document.getElementById(`expanded-empty-${idx}`);
+  const expCanvas = document.getElementById(`expanded-chart-${idx}`);
+  const datasets = buildDatasets(viewHist, false);
+
+  if (emptyHint) {
+    if (!viewHist.length || !datasets.length) {
+      emptyHint.classList.remove("hidden");
+    } else {
+      emptyHint.classList.add("hidden");
+    }
+  }
+
+  if (expCanvas && typeof window.Chart === "function") {
+    const expChart = new window.Chart(expCanvas.getContext("2d"), {
+      type: "line",
+      data: {
+        labels: viewHist.map((h) => h.date),
+        datasets,
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          legend: { position: "top", labels: { boxWidth: 14, font: { size: 11 } } },
+          tooltip: {
+            callbacks: {
+              afterTitle: (items) => {
+                const i = items[0]?.dataIndex;
+                return i !== undefined && viewHist[i]?.ts ? `抓取時間：${viewHist[i].ts}` : "";
+              },
+              label: (c) => `${c.dataset.label}: ${c.parsed.y !== null ? c.parsed.y + " 元" : "--"}`,
+            },
+          },
+        },
+        scales: {
+          y: { beginAtZero: false, ticks: { callback: (v) => v + "元" } },
+        },
+      },
+    });
+    expandedCharts.set(idx, expChart);
+  }
+}
+
 function toggleDetailRow(idx, colSpan) {
   const detailRow = document.getElementById(`detail-row-${idx}`);
   const arrowEl = document.getElementById(`arrow-${idx}`);
@@ -243,13 +374,12 @@ function toggleDetailRow(idx, colSpan) {
   if (arrowEl) arrowEl.textContent = "▾";
 
   const item = filteredList[idx];
-  const hist = item.history || [];
-  const reversed = [...hist].reverse();
-  const last = hist[hist.length - 1] || {};
+  const fullHist = item.history || [];
+  const last = fullHist[fullHist.length - 1] || {};
 
-  const itemHasMint = hist.some((h) => hasPositivePrice(h.site_a_mint) || hasPositivePrice(h.site_b_mint));
-  const itemHasCto = hist.some((h) => hasPositivePrice(h.site_a_cto) || hasPositivePrice(h.site_b_cto));
-  const itemHasUsed = hist.some((h) => hasPositivePrice(h.site_a_used) || hasPositivePrice(h.site_b_used));
+  const itemHasMint = fullHist.some((h) => hasPositivePrice(h.site_a_mint) || hasPositivePrice(h.site_b_mint));
+  const itemHasCto = fullHist.some((h) => hasPositivePrice(h.site_a_cto) || hasPositivePrice(h.site_b_cto));
+  const itemHasUsed = fullHist.some((h) => hasPositivePrice(h.site_a_used) || hasPositivePrice(h.site_b_used));
 
   const cardsHtml = [
     itemHasMint ? `
@@ -291,8 +421,18 @@ function toggleDetailRow(idx, colSpan) {
           <span class="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 text-xs font-semibold">${escapeHtml(item.category)}</span>
           ${item.code ? `<span class="px-2 py-0.5 rounded bg-slate-200 text-slate-700 font-mono text-xs">${escapeHtml(item.code)}</span>` : ""}
         </div>
-        <div class="text-xs text-slate-500">
-          更新日：${escapeHtml(last.date || "-")} · 共 ${hist.length} 筆紀錄
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="text-xs text-slate-500 mr-1">
+            最新更新日：${escapeHtml(last.date || "-")} · 全年保留 ${fullHist.length} 筆
+          </span>
+          <button type="button" data-days="30"
+            class="detail-range-btn-${idx} px-2.5 py-1 rounded text-xs font-medium bg-indigo-600 text-white">
+            近 30 天
+          </button>
+          <button type="button" data-days="0"
+            class="detail-range-btn-${idx} px-2.5 py-1 rounded text-xs font-medium bg-slate-200 text-slate-700 hover:bg-slate-300">
+            全部歷史
+          </button>
         </div>
       </div>
 
@@ -303,6 +443,10 @@ function toggleDetailRow(idx, colSpan) {
           <div class="text-xs font-semibold text-slate-600 mb-2">雙站同色系深淺走勢對比圖（元）</div>
           <div class="relative h-56 sm:h-60">
             <canvas id="expanded-chart-${idx}"></canvas>
+            <div id="expanded-empty-${idx}"
+              class="hidden absolute inset-0 flex items-center justify-center text-xs text-slate-400 bg-white/80 pointer-events-none">
+              近 ${CHART_RANGE_DAYS} 天內無價格變動紀錄，可切換「全部歷史」檢視
+            </div>
           </div>
         </div>
 
@@ -320,16 +464,7 @@ function toggleDetailRow(idx, colSpan) {
                   ${itemHasUsed ? `<th class="px-2 py-2 text-right font-medium text-rose-700">金投信</th><th class="px-2 py-2 text-right font-medium text-rose-400">點購信</th>` : ""}
                 </tr>
               </thead>
-              <tbody class="divide-y divide-slate-100">
-                ${reversed.map((r) => `
-                  <tr class="hover:bg-slate-50">
-                    <td class="px-2.5 py-1.5 text-slate-700 whitespace-nowrap">${escapeHtml(r.date)}</td>
-                    ${itemHasMint ? `<td class="px-2 py-1.5 text-right font-medium text-emerald-700">${fmtNum(r.site_a_mint)}</td><td class="px-2 py-1.5 text-right font-medium text-emerald-500">${fmtNum(r.site_b_mint)}</td>` : ""}
-                    ${itemHasCto ? `<td class="px-2 py-1.5 text-right font-medium text-amber-700">${fmtNum(r.site_a_cto)}</td><td class="px-2 py-1.5 text-right font-medium text-amber-500">${fmtNum(r.site_b_cto)}</td>` : ""}
-                    ${itemHasUsed ? `<td class="px-2 py-1.5 text-right font-medium text-rose-700">${fmtNum(r.site_a_used)}</td><td class="px-2 py-1.5 text-right font-medium text-rose-400">${fmtNum(r.site_b_used)}</td>` : ""}
-                  </tr>
-                `).join("")}
-              </tbody>
+              <tbody id="detail-tbody-${idx}" class="divide-y divide-slate-100"></tbody>
             </table>
           </div>
         </div>
@@ -337,34 +472,18 @@ function toggleDetailRow(idx, colSpan) {
     </div>
   `;
 
-  const expCanvas = document.getElementById(`expanded-chart-${idx}`);
-  if (expCanvas && typeof window.Chart === "function") {
-    const expChart = new window.Chart(expCanvas.getContext("2d"), {
-      type: "line",
-      data: { labels: hist.map((h) => h.date), datasets: buildDatasets(hist, false) },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: { mode: "index", intersect: false },
-        plugins: {
-          legend: { position: "top", labels: { boxWidth: 14, font: { size: 11 } } },
-          tooltip: {
-            callbacks: {
-              afterTitle: (items) => {
-                const i = items[0]?.dataIndex;
-                return i !== undefined && hist[i]?.ts ? `抓取時間：${hist[i].ts}` : "";
-              },
-              label: (c) => `${c.dataset.label}: ${c.parsed.y !== null ? c.parsed.y + " 元" : "--"}`,
-            },
-          },
-        },
-        scales: {
-          y: { beginAtZero: false, ticks: { callback: (v) => v + "元" } },
-        },
-      },
+  panel.querySelectorAll(`.detail-range-btn-${idx}`).forEach((btn) => {
+    btn.addEventListener("click", () => {
+      panel.querySelectorAll(`.detail-range-btn-${idx}`).forEach((b) => {
+        b.className = `detail-range-btn-${idx} px-2.5 py-1 rounded text-xs font-medium bg-slate-200 text-slate-700 hover:bg-slate-300`;
+      });
+      btn.className = `detail-range-btn-${idx} px-2.5 py-1 rounded text-xs font-medium bg-indigo-600 text-white`;
+      renderExpandedContent(idx, item, Number(btn.dataset.days));
     });
-    expandedCharts.set(idx, expChart);
-  }
+  });
+
+  // 詳情圖表與明細表預設同步顯示最近 30 天
+  renderExpandedContent(idx, item, CHART_RANGE_DAYS);
 }
 
 function renderTable() {
@@ -405,7 +524,7 @@ function renderTable() {
       ${activeCols.mint ? `<th class="px-2.5 sm:px-3 py-3 text-right font-semibold text-emerald-700 whitespace-nowrap">新票 (金投/點購)</th>` : ""}
       ${activeCols.cto ? `<th class="px-2.5 sm:px-3 py-3 text-right font-semibold text-amber-700 whitespace-nowrap">蓋銷 (金投/點購)</th>` : ""}
       ${activeCols.used ? `<th class="px-2.5 sm:px-3 py-3 text-right font-semibold text-rose-700 whitespace-nowrap">信銷 (金投/點購)</th>` : ""}
-      <th class="px-2.5 sm:px-3 py-3 text-center font-semibold w-36 sm:w-44">雙站走勢圖</th>
+      <th class="px-2.5 sm:px-3 py-3 text-center font-semibold w-36 sm:w-44">近30天走勢</th>
       <th class="px-2.5 sm:px-3 py-3 text-center font-semibold w-24">更新日</th>
       <th class="px-2 py-3 text-center font-semibold w-10">明細</th>
     </tr>
@@ -443,6 +562,10 @@ function renderTable() {
         <td class="px-2 py-1">
           <div class="w-32 sm:w-40 h-[42px] mx-auto relative">
             <canvas class="sparkline-canvas" data-idx="${idx}"></canvas>
+            <div id="spark-empty-${idx}"
+              class="hidden absolute inset-0 flex items-center justify-center text-[10px] text-slate-300 pointer-events-none">
+              近30天無異動
+            </div>
           </div>
         </td>
         <td class="px-2.5 sm:px-3 py-1.5 text-center text-xs text-slate-500 whitespace-nowrap">${escapeHtml(latest.date || "-")}</td>
