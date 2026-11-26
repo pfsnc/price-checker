@@ -8,6 +8,7 @@ import re
 import tempfile
 import time
 import unicodedata
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -29,11 +30,11 @@ BASE_DIR = Path(__file__).resolve().parent
 DATA_ENC_PATH = BASE_DIR / "docs" / "data.enc"
 
 # ==========================================
-# 集中管理：來源白名單、傳輸限制與資料閾值（可安全調整）
+# 集中管理：來源白名單、傳輸限制與基本格式參數
 # ==========================================
 
-# 主機白名單僅能防止 SSRF／惡意轉址，無法防範網域過期搶註或 HTTP 明文竄改。
-# 點購網目前僅提供 HTTP，其回應內容一律視為不可信輸入，須通過嚴格驗證與 Sanity Check。
+# 主機白名單僅能防範 SSRF 與惡意轉址，無法防範網域過期搶註或 HTTP 明文遭中間人竄改。
+# 點購網目前僅提供 HTTP，其回應內容一律視為不可信輸入，必須通過回應格式與結構驗證。
 ALLOWED_HOST_POLICIES: Dict[str, Tuple[str, ...]] = {
     "m.cngold.org": ("https",),
     "www.5151sc.com": ("http", "https"),
@@ -66,17 +67,7 @@ MAX_FUTURE_DAYS = 1
 MAX_PRICE_YUAN = 50_000_000.0  # 單筆報價合理上限（5000 萬元）
 MAX_RECORDS_PER_PAGE = 1_000
 MAX_RECORDS_PER_RUN = 5_000
-
-# ==========================================
-# Fail-Closed 資料合理性檢查 (Sanity Check) 門檻（全來源適用）
-# 註：正常市場價格劇烈波動不予攔截，僅檢查結構與來源完整性。
-# ==========================================
-MIN_STAMPS_FOR_COUNT_CHECK = 20     # 既有品種數達此門檻才啟用比例檢查
-MAX_STAMP_DROP_RATIO = 0.40         # 單一來源或總體覆蓋率減少超過 40% 視為異常或改版
-MAX_STAMP_GROWTH_RATIO = 2.00       # 新增品種超過既有總數 200% 視為誤抓雜訊
-MIN_FIELD_COUNT_FOR_RETENTION = 10  # 某來源某品相既有報價數達此門檻才檢查保留率
-MIN_PRICE_RETENTION_RATIO = 0.70    # 有效價格保留率低於 70% 視為欄位解析失效
-MAX_SAME_STAMP_DUPES_PER_SITE = 3   # 單站單一郵票同輪抓取重複上限
+HISTORY_RETENTION_DAYS = 365
 
 PBKDF2_ITERATIONS = 100_000
 PRICE_FIELDS = (
@@ -131,8 +122,15 @@ class UnsafeUrlError(ValueError):
     """URL 不符合主機白名單或安全傳輸政策。"""
 
 
-class SanityCheckError(RuntimeError):
-    """抓取結果未通過資料合理性檢查（觸發 Fail-Closed）。"""
+class FormatCompatibilityError(RuntimeError):
+    """確認來源網頁格式異常或已無法預期解析（例如網域被替換、非預期網站內容或結構失效）。"""
+
+
+@dataclass
+class FetchResult:
+    html: Optional[str]
+    status: str  # "ok" | "network_error" | "security_error" | "format_error"
+    reason: str = ""
 
 
 # ==========================================
@@ -190,13 +188,18 @@ def _polite_sleep() -> None:
     time.sleep(random.uniform(2.0, 3.0))
 
 
-def _fetch_html(session: requests.Session, url: str, referer: str = "") -> Optional[str]:
-    """手動驗證每一次轉址與回應標頭／內容上限，不跟隨至非白名單網域。"""
+def _fetch_html(session: requests.Session, url: str, referer: str = "") -> FetchResult:
+    """
+    安全執行 HTTP GET，明確區分「暫時網路錯誤」、「不安全 URL／轉址」與「網站格式異常」：
+    - 手動檢查每一次 redirect，拒絕轉址至非白名單網域或降級協定。
+    - 驗證 HTTP 200、Content-Type、回應大小上限（串流截斷）與基本 HTML 結構。
+    - 嚴禁無限重試迴圈，也不將完整回應內容或 secrets 寫入 log。
+    """
     try:
         current_url = validate_url(url)
     except UnsafeUrlError as exc:
-        logger.warning("已拒絕不安全 URL [%s]: %s", url, exc)
-        return None
+        logger.warning("[安全檢查] 已拒絕不安全 URL [%s]: %s", url, exc)
+        return FetchResult(None, "security_error", str(exc))
 
     req_headers = dict(HEADERS)
     if referer:
@@ -215,41 +218,45 @@ def _fetch_html(session: requests.Session, url: str, referer: str = "") -> Optio
                 stream=True,
             )
         except requests.RequestException as exc:
-            logger.warning("請求失敗，已安全跳過 [%s]: %s", current_url, type(exc).__name__)
-            return None
+            logger.warning("[網路暫時錯誤] 連線失敗或超時，已安全跳過 [%s]: %s", current_url, type(exc).__name__)
+            return FetchResult(None, "network_error", type(exc).__name__)
 
         try:
             if resp.status_code in (301, 302, 303, 307, 308):
                 loc = (resp.headers.get("Location") or "").strip()
                 if not loc:
-                    logger.warning("轉址缺少 Location 標頭 [%s]", current_url)
-                    return None
+                    logger.warning("[格式異常] 轉址缺少 Location 標頭 [%s]", current_url)
+                    return FetchResult(None, "format_error", "redirect_missing_location")
                 next_url = urljoin(current_url, loc)
                 try:
                     current_url = validate_url(next_url)
                 except UnsafeUrlError as exc:
-                    logger.warning("已拒絕不安全轉址目標 [%s -> %s]: %s", current_url, next_url, exc)
-                    return None
+                    logger.warning("[安全檢查] 已拒絕不安全轉址目標 [%s -> %s]: %s", current_url, next_url, exc)
+                    return FetchResult(None, "security_error", str(exc))
                 continue
 
+            if resp.status_code >= 500 or resp.status_code in (408, 429):
+                logger.warning("[網路暫時錯誤] 伺服器暫時回應 HTTP %d [%s]", resp.status_code, current_url)
+                return FetchResult(None, "network_error", f"http_{resp.status_code}")
+
             if resp.status_code != 200:
-                logger.warning("HTTP 狀態碼異常 [%s]: %d", current_url, resp.status_code)
-                return None
+                logger.warning("[HTTP 錯誤] 非 200 狀態碼 HTTP %d [%s]", resp.status_code, current_url)
+                return FetchResult(None, "network_error", f"http_{resp.status_code}")
 
             ctype = (resp.headers.get("Content-Type") or "").lower()
             if not any(allowed in ctype for allowed in ALLOWED_CONTENT_TYPES):
-                logger.warning("拒絕非 HTML Content-Type [%s]: %r", current_url, ctype)
-                return None
+                logger.error("[格式異常] 拒絕非 HTML Content-Type [%s]: %r", current_url, ctype)
+                return FetchResult(None, "format_error", "non_html_content_type")
 
             clen = resp.headers.get("Content-Length")
             if clen is not None:
                 try:
                     if int(clen) < 0 or int(clen) > MAX_RESPONSE_BYTES:
-                        logger.warning("拒絕過大 Content-Length [%s]: %s", current_url, clen)
-                        return None
+                        logger.error("[格式異常] 回應 Content-Length 超出上限 [%s]: %s", current_url, clen)
+                        return FetchResult(None, "format_error", "content_length_exceeded")
                 except ValueError:
-                    logger.warning("Content-Length 格式異常 [%s]", current_url)
-                    return None
+                    logger.error("[格式異常] Content-Length 格式不合法 [%s]", current_url)
+                    return FetchResult(None, "format_error", "invalid_content_length")
 
             chunks: List[bytes] = []
             total_bytes = 0
@@ -258,26 +265,26 @@ def _fetch_html(session: requests.Session, url: str, referer: str = "") -> Optio
                     continue
                 total_bytes += len(chunk)
                 if total_bytes > MAX_RESPONSE_BYTES:
-                    logger.warning("串流回應超過 %d bytes 上限，已中止 [%s]", MAX_RESPONSE_BYTES, current_url)
-                    return None
+                    logger.error("[格式異常] 串流回應超過 %d bytes 上限，已中止 [%s]", MAX_RESPONSE_BYTES, current_url)
+                    return FetchResult(None, "format_error", "response_too_large")
                 chunks.append(chunk)
 
             raw_bytes = b"".join(chunks)
             if not raw_bytes.strip():
-                logger.warning("收到空白回應 [%s]", current_url)
-                return None
+                logger.error("[格式異常] 收到空白 HTTP 200 回應 [%s]", current_url)
+                return FetchResult(None, "format_error", "empty_body")
 
             text = _decode_html_bytes(raw_bytes, ctype)
             if not re.search(r"<(?:!doctype\s+html|html|body|table)\b", text[:8192], re.IGNORECASE):
-                logger.warning("回應缺少基本 HTML 結構 [%s]", current_url)
-                return None
+                logger.error("[格式異常] 回應缺少基本 HTML 結構 [%s]", current_url)
+                return FetchResult(None, "format_error", "missing_html_structure")
 
-            return text
+            return FetchResult(text, "ok")
         finally:
             resp.close()
 
-    logger.warning("轉址次數超過上限 (%d) [%s]", MAX_REDIRECTS, url)
-    return None
+    logger.warning("[轉址異常] 轉址次數超過上限 (%d) [%s]", MAX_REDIRECTS, url)
+    return FetchResult(None, "format_error", "too_many_redirects")
 
 
 # ==========================================
@@ -803,7 +810,7 @@ def _parse_table(
 
 
 # ==========================================
-# 資料源 A 與 B 爬蟲
+# 資料源 A 與 B 爬蟲（附網站格式相容性檢查）
 # ==========================================
 
 def _extract_cngold_title(soup: BeautifulSoup, fallback: str) -> str:
@@ -816,20 +823,34 @@ def _extract_cngold_title(soup: BeautifulSoup, fallback: str) -> str:
     return fallback
 
 
-def scrape_site_a(session: requests.Session, per_source_limit: int = 10) -> Tuple[List[Dict[str, Any]], int]:
+def scrape_site_a(
+    session: requests.Session,
+    per_source_limit: int = 10,
+) -> Tuple[List[Dict[str, Any]], int, List[str]]:
     seen_urls = set()
     articles: List[Tuple[str, str]] = []
+    format_errors: List[str] = []
+    list_pages_ok = 0
 
     for idx, list_url in enumerate(CNGOLD_URLS):
         if idx > 0:
             _polite_sleep()
-        html = _fetch_html(session, list_url, referer="https://m.cngold.org/cang/")
-        if not html:
+        res = _fetch_html(session, list_url, referer="https://m.cngold.org/cang/")
+        if res.status == "network_error":
+            continue
+        if res.status in ("format_error", "security_error"):
+            format_errors.append(f"[Site A] 列表頁異常 ({list_url}): {res.status} / {res.reason}")
             continue
 
+        list_pages_ok += 1
+        html = res.html or ""
         source_count = 0
         try:
             soup = BeautifulSoup(html, "html.parser")
+            if "邮票" not in html and "金投" not in html:
+                format_errors.append(f"[Site A] 列表頁內容與預期網站不符 ({list_url})")
+                continue
+
             for a_tag in soup.find_all("a", href=True):
                 full_url = urljoin(list_url, a_tag["href"].strip())
                 try:
@@ -851,19 +872,22 @@ def scrape_site_a(session: requests.Session, per_source_limit: int = 10) -> Tupl
                 source_count += 1
                 if source_count >= per_source_limit:
                     break
+
+            if source_count == 0:
+                format_errors.append(f"[Site A] 列表頁可連線但找不到預期行情文章連結 ({list_url})")
         except Exception as exc:
-            logger.error("[Site A] 解析列表失敗 [%s]: %s", list_url, type(exc).__name__)
+            format_errors.append(f"[Site A] 列表頁 HTML 解析失敗 ({list_url}): {type(exc).__name__}")
 
     records: List[Dict[str, Any]] = []
-    processed = 0
+    articles_ok = 0
     for url, list_title in articles:
         _polite_sleep()
-        html = _fetch_html(session, url, referer="https://m.cngold.org/cang/")
-        if not html:
+        res = _fetch_html(session, url, referer="https://m.cngold.org/cang/")
+        if res.status != "ok" or not res.html:
             continue
 
         try:
-            soup = BeautifulSoup(html, "html.parser")
+            soup = BeautifulSoup(res.html, "html.parser")
             article_title = _extract_cngold_title(soup, list_title)
             combined = f"{article_title} {list_title}"
             category = _detect_page_category(combined)
@@ -875,17 +899,32 @@ def scrape_site_a(session: requests.Session, per_source_limit: int = 10) -> Tupl
 
             logger.info("[Site A] %s -> 分類:[%s] 更新日:[%s] %d 筆", article_title[:24], category, record_date, len(page_rows))
             records.extend(page_rows)
-            processed += 1
+            articles_ok += 1
         except Exception as exc:
-            logger.warning("[Site A] 解析異常已跳過 [%s]: %s", url, type(exc).__name__)
+            logger.warning("[Site A] 單篇文章解析跳過 [%s]: %s", url, type(exc).__name__)
 
-    return records, processed
+    if list_pages_ok > 0 and articles_ok > 0 and not records:
+        format_errors.append("[Site A] 成功取得文章 HTML 但表格結構無法解析出任何有效報價")
+
+    return records, articles_ok, format_errors
 
 
-def scrape_site_b(session: requests.Session, max_pages: int = 20) -> Tuple[List[Dict[str, Any]], int]:
-    index_html = _fetch_html(session, SC5151_INDEX_URL, referer="http://www.5151sc.com/")
-    if not index_html:
-        return [], 0
+def scrape_site_b(
+    session: requests.Session,
+    max_pages: int = 20,
+) -> Tuple[List[Dict[str, Any]], int, List[str]]:
+    format_errors: List[str] = []
+    index_res = _fetch_html(session, SC5151_INDEX_URL, referer="http://www.5151sc.com/")
+    if index_res.status == "network_error":
+        return [], 0, format_errors
+    if index_res.status in ("format_error", "security_error") or not index_res.html:
+        format_errors.append(f"[Site B] 首頁回應異常 ({SC5151_INDEX_URL}): {index_res.status} / {index_res.reason}")
+        return [], 0, format_errors
+
+    index_html = index_res.html
+    if "邮票" not in index_html:
+        format_errors.append("[Site B] 首頁 HTML 內容缺少預期郵票網站標記，可能網域異動或改版")
+        return [], 0, format_errors
 
     include_kw = (
         "纪念邮票", "特种邮票", "文革邮票", "编号邮票",
@@ -922,19 +961,23 @@ def scrape_site_b(session: requests.Session, max_pages: int = 20) -> Tuple[List[
             if len(subpages) >= max_pages:
                 break
     except Exception as exc:
-        logger.error("[Site B] 解析首頁失敗: %s", type(exc).__name__)
-        return [], 0
+        format_errors.append(f"[Site B] 首頁解析失敗: {type(exc).__name__}")
+        return [], 0, format_errors
+
+    if not subpages:
+        format_errors.append("[Site B] 首頁可連線但找不到任何預期子頁面連結")
+        return [], 0, format_errors
 
     records: List[Dict[str, Any]] = []
-    processed = 0
+    pages_ok = 0
     for url, link_title in subpages:
         _polite_sleep()
-        html = _fetch_html(session, url, referer=SC5151_INDEX_URL)
-        if not html:
+        res = _fetch_html(session, url, referer=SC5151_INDEX_URL)
+        if res.status != "ok" or not res.html:
             continue
 
         try:
-            soup = BeautifulSoup(html, "html.parser")
+            soup = BeautifulSoup(res.html, "html.parser")
             h1 = soup.find("h1")
             page_title = h1.get_text(" ", strip=True) if h1 else (soup.title.string.strip() if soup.title and soup.title.string else link_title)
             title_combo = f"{page_title} {link_title}"
@@ -964,127 +1007,59 @@ def scrape_site_b(session: requests.Session, max_pages: int = 20) -> Tuple[List[
 
             logger.info("[Site B] %s -> 分類:[%s] 更新日:[%s] %d 筆", page_title[:24], category, record_date, len(page_rows))
             records.extend(page_rows)
-            processed += 1
+            pages_ok += 1
         except Exception as exc:
-            logger.warning("[Site B] 解析異常已跳過 [%s]: %s", url, type(exc).__name__)
+            logger.warning("[Site B] 單一子頁解析跳過 [%s]: %s", url, type(exc).__name__)
 
-    return records, processed
+    if pages_ok > 0 and not records:
+        format_errors.append("[Site B] 成功取得子頁 HTML 但表格結構無法解析出任何有效報價")
+
+    return records, pages_ok, format_errors
 
 
 # ==========================================
-# Fail-Closed 資料合理性檢查（所有來源一體適用）與寫入
+# 基本欄位格式檢查、合併與 365 天歷史清理
 # ==========================================
 
 def run_sanity_checks(
-    existing_store: Dict[str, Any],
     all_records: List[Dict[str, Any]],
     today: Optional[datetime] = None,
 ) -> None:
-    if not all_records:
-        raise SanityCheckError("未抓取到任何有效記錄")
+    """
+    僅驗證基本型別、有效日期、有限非負價格與總筆數上限；
+    不因品種數量變化、覆蓋率、欄位保留率或正常市場價格波動而阻擋更新。
+    """
     if len(all_records) > MAX_RECORDS_PER_RUN:
-        raise SanityCheckError(f"抓取總筆數異常過大 ({len(all_records)} > {MAX_RECORDS_PER_RUN})")
+        raise FormatCompatibilityError(
+            f"抓取總筆數異常過大 ({len(all_records)} > {MAX_RECORDS_PER_RUN})，疑似頁面結構錯亂"
+        )
 
     now_dt = today or datetime.now()
     max_allowed_date = (now_dt + timedelta(days=MAX_FUTURE_DAYS)).strftime("%Y-%m-%d")
 
-    dupes: Dict[Tuple[str, str], int] = {}
-    scraped_by_site: Dict[str, List[Dict[str, Any]]] = {site: [] for site in ACTIVE_SITES}
-
     for rec in all_records:
+        if not isinstance(rec.get("id"), str) or not rec["id"]:
+            raise FormatCompatibilityError("資料格式錯誤：缺少郵票識別碼")
+        if not isinstance(rec.get("name"), str) or not rec["name"]:
+            raise FormatCompatibilityError("資料格式錯誤：缺少郵票名稱")
+
         dt = str(rec.get("date", ""))
         try:
             datetime.strptime(dt, "%Y-%m-%d")
         except ValueError as exc:
-            raise SanityCheckError(f"無效日期格式: {dt!r}") from exc
+            raise FormatCompatibilityError(f"無效日期格式: {dt!r}") from exc
 
         if dt < MIN_VALID_DATE or dt > max_allowed_date:
-            raise SanityCheckError(f"日期超出合理範圍: {dt!r}（容許 {MIN_VALID_DATE} ~ {max_allowed_date}）")
+            raise FormatCompatibilityError(
+                f"日期超出合理範圍: {dt!r}（容許 {MIN_VALID_DATE} ~ {max_allowed_date}）"
+            )
 
         for cond in ("mint", "cto", "used"):
             p = rec.get(cond)
             if p is not None and (
                 not isinstance(p, (int, float)) or not math.isfinite(p) or p < 0 or p > MAX_PRICE_YUAN
             ):
-                raise SanityCheckError(f"發現異常價格數值 [{rec.get('id')}]: {p!r}")
-
-        site = rec["site"]
-        scraped_by_site.setdefault(site, []).append(rec)
-        dupe_key = (site, rec["id"])
-        dupes[dupe_key] = dupes.get(dupe_key, 0) + 1
-        if dupes[dupe_key] > MAX_SAME_STAMP_DUPES_PER_SITE:
-            raise SanityCheckError(
-                f"單站單一郵票重複過多次 [{site} / {rec['id']}]: {dupes[dupe_key]} 次"
-            )
-
-    existing_stamps = existing_store.get("stamps", {})
-
-    # 對所有來源逐一檢查：日期倒退、來源中斷、品種覆蓋率、品相欄位保留率
-    for site in ACTIVE_SITES:
-        site_recs = scraped_by_site.get(site, [])
-        site_ids = {r["id"] for r in site_recs}
-
-        prev_site_ids = {
-            sid
-            for sid, entry in existing_stamps.items()
-            if entry.get("history")
-            and any(entry["history"][-1].get(f"{site}_{c}") is not None for c in ("mint", "cto", "used"))
-        }
-
-        if len(prev_site_ids) >= MIN_STAMPS_FOR_COUNT_CHECK:
-            if not site_ids:
-                raise SanityCheckError(f"來源 {site} 本次完全無資料（既有 {len(prev_site_ids)} 款）")
-            site_drop_ratio = 1.0 - (len(prev_site_ids & site_ids) / len(prev_site_ids))
-            if site_drop_ratio > MAX_STAMP_DROP_RATIO:
-                raise SanityCheckError(
-                    f"來源 {site} 覆蓋率大幅下降（減少 {site_drop_ratio:.1%}，既有 {len(prev_site_ids)}，本次命中 {len(prev_site_ids & site_ids)}）"
-                )
-
-        if site_recs:
-            prev_dates = [
-                entry["history"][-1]["date"]
-                for entry in existing_stamps.values()
-                if entry.get("history")
-                and any(entry["history"][-1].get(f"{site}_{c}") is not None for c in ("mint", "cto", "used"))
-            ]
-            if prev_dates:
-                prev_max = max(prev_dates)
-                new_max = max(r["date"] for r in site_recs)
-                if new_max < prev_max:
-                    raise SanityCheckError(f"{site} 更新日期倒退（本次最新 {new_max} < 既有最新 {prev_max}）")
-
-        for cond in ("mint", "cto", "used"):
-            field = f"{site}_{cond}"
-            prev_field_ids = {
-                sid
-                for sid, entry in existing_stamps.items()
-                if entry.get("history") and entry["history"][-1].get(field) is not None
-            }
-            overlap = prev_field_ids & site_ids
-            if len(overlap) >= MIN_FIELD_COUNT_FOR_RETENTION:
-                retained_ids = {r["id"] for r in site_recs if r["id"] in overlap and r.get(cond) is not None}
-                retention_ratio = len(retained_ids) / len(overlap)
-                if retention_ratio < MIN_PRICE_RETENTION_RATIO:
-                    raise SanityCheckError(
-                        f"欄位 {field} 有效價格大量消失（保留率 {retention_ratio:.1%} < {MIN_PRICE_RETENTION_RATIO:.0%}）"
-                    )
-
-    if len(existing_stamps) < MIN_STAMPS_FOR_COUNT_CHECK:
-        return
-
-    existing_ids = set(existing_stamps.keys())
-    scraped_ids = {r["id"] for r in all_records}
-    drop_ratio = 1.0 - (len(existing_ids & scraped_ids) / len(existing_ids))
-    if drop_ratio > MAX_STAMP_DROP_RATIO:
-        raise SanityCheckError(
-            f"整體既有品種覆蓋率大幅下降（減少 {drop_ratio:.1%}，既有 {len(existing_ids)} 款，本次命中 {len(existing_ids & scraped_ids)} 款）"
-        )
-
-    growth_ratio = len(scraped_ids - existing_ids) / len(existing_ids)
-    if growth_ratio > MAX_STAMP_GROWTH_RATIO:
-        raise SanityCheckError(
-            f"新增品種異常暴增（+{growth_ratio:.1%}，新增 {len(scraped_ids - existing_ids)} 款）"
-        )
+                raise FormatCompatibilityError(f"發現異常價格數值 [{rec.get('id')}]: {p!r}")
 
 
 def apply_dual_source_smart_diff(
@@ -1181,41 +1156,93 @@ def apply_dual_source_smart_diff(
     return appended, len(grouped)
 
 
+def prune_old_history(
+    store: Dict[str, Any],
+    reference_dt: datetime,
+    retention_days: int = HISTORY_RETENTION_DAYS,
+) -> int:
+    """
+    只保留最近 retention_days（預設 365 天）的 history 資料（以目前檢查時間為 cutoff 基準）。
+    若某郵票清理後完全沒有剩餘 history，保留最新一筆紀錄，避免有無報價項目。
+    """
+    cutoff_date = reference_dt.date() - timedelta(days=retention_days)
+    stamps_map = store.get("stamps", {})
+    pruned_count = 0
+
+    for entry in stamps_map.values():
+        history = entry.get("history", [])
+        if not history:
+            continue
+
+        kept: List[Dict[str, Any]] = []
+        for point in history:
+            dt_str = str(point.get("date") or "")
+            try:
+                pt_date = datetime.strptime(dt_str, "%Y-%m-%d").date()
+            except ValueError:
+                pruned_count += 1
+                continue
+
+            if pt_date >= cutoff_date:
+                kept.append(point)
+            else:
+                pruned_count += 1
+
+        if not kept:
+            latest_point = max(history, key=lambda p: (str(p.get("date") or ""), str(p.get("ts") or "")))
+            kept = [latest_point]
+            pruned_count = max(0, pruned_count - 1)
+
+        entry["history"] = kept
+
+    return pruned_count
+
+
 def main() -> None:
     password = os.environ.get("ENCRYPT_PASSWORD", "").strip()
     if not password:
         raise RuntimeError("環境變數 ENCRYPT_PASSWORD 未設定，無法進行加密輸出。")
 
     store = load_existing_store(password)
-    checked_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    checked_dt = datetime.now()
+    checked_at = checked_dt.strftime("%Y-%m-%d %H:%M:%S")
 
     with requests.Session() as session:
-        rec_a, proc_a = scrape_site_a(session, per_source_limit=10)
+        rec_a, proc_a, err_a = scrape_site_a(session, per_source_limit=10)
         _polite_sleep()
-        rec_b, proc_b = scrape_site_b(session, max_pages=20)
+        rec_b, proc_b, err_b = scrape_site_b(session, max_pages=20)
 
     all_records = rec_a + rec_b
+    format_errors = err_a + err_b
     logger.info(
         "雙站擷取摘要 -> Site A: %d 頁 / %d 筆；Site B: %d 頁 / %d 筆",
         proc_a, len(rec_a), proc_b, len(rec_b),
     )
 
+    if format_errors:
+        for msg in format_errors:
+            logger.error("格式不相容錯誤: %s", msg)
+        raise FormatCompatibilityError("偵測到來源網站格式錯誤或已無法預期解析，已中止並保留舊資料檔。")
+
     if not all_records:
-        logger.warning("本次雙站皆未取得有效報價，保留既有加密檔不覆寫。")
+        logger.warning("本次因暫時性網路錯誤未取得任何有效報價，保留既有 docs/data.enc 不覆寫。")
         return
 
-    # Fail-closed 檢查：任一來源結構異常即中止，絕不寫入／覆寫 docs/data.enc
-    run_sanity_checks(store, all_records)
+    run_sanity_checks(all_records, today=checked_dt)
 
     appended, merged_count = apply_dual_source_smart_diff(store, all_records, checked_at)
+    pruned_count = prune_old_history(store, checked_dt, retention_days=HISTORY_RETENTION_DAYS)
+    logger.info("歷史紀錄清理完成（保留最近 %d 天）：已清除 %d 筆舊紀錄。", HISTORY_RETENTION_DAYS, pruned_count)
+
     encrypted_output = encrypt_json_payload(store, password)
     atomic_write_text(DATA_ENC_PATH, encrypted_output)
 
     logger.info(
-        "去重合併完成！共 %d 款獨立郵票，新增/更新 %d 筆價格變動紀錄，已原子寫入 %s",
+        "處理完成！檢查 %d 款郵票，新增/更新 %d 筆價格變動，last_checked=%s，updated_at=%s",
         merged_count,
         appended,
-        DATA_ENC_PATH,
+        store["last_checked"],
+        store["updated_at"],
     )
 
 
