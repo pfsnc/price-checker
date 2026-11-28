@@ -65,6 +65,11 @@ function filterHistoryByDays(history, days) {
   });
 }
 
+function getDisplayDate(item) {
+  const latest = item.history?.[item.history.length - 1] || {};
+  return item.latest_source_date || latest.date || "-";
+}
+
 // ==========================================
 // 自然排序 (Catalog Number 優先，其次 Name)
 // ==========================================
@@ -422,7 +427,7 @@ function toggleDetailRow(idx, colSpan) {
         </div>
         <div class="flex flex-wrap items-center gap-2">
           <span class="text-xs text-slate-500 mr-1">
-            最新更新日：${escapeHtml(last.date || "-")} · 全年保留 ${fullHist.length} 筆
+            更新日：${escapeHtml(getDisplayDate(item))} · 全年保留 ${fullHist.length} 筆
           </span>
           <button type="button" data-days="30"
             class="detail-range-btn-${idx} px-2.5 py-1 rounded text-xs font-medium bg-indigo-600 text-white">
@@ -566,7 +571,7 @@ function renderTable() {
             </div>
           </div>
         </td>
-        <td class="px-2.5 sm:px-3 py-1.5 text-center text-xs text-slate-500 whitespace-nowrap">${escapeHtml(latest.date || "-")}</td>
+        <td class="px-2.5 sm:px-3 py-1.5 text-center text-xs text-slate-500 whitespace-nowrap">${escapeHtml(getDisplayDate(item))}</td>
         <td class="px-2 py-1.5 text-center text-indigo-600 font-bold select-none">
           <span id="arrow-${idx}">▸</span>
         </td>
@@ -606,18 +611,18 @@ function getDataSourceUrl() {
 }
 
 async function decryptResponsePayload(payload, password) {
-  // 支援 Cloudflare D1 分塊格式 { v: 3, chunks: [...] }，同時向下相容舊版單檔 data.enc
   if (payload && Array.isArray(payload.chunks)) {
     if (!payload.chunks.length) {
       throw new Error("雲端資料庫目前為空，請先執行爬蟲或遷移工作流程。");
     }
-    const merged = { updated_at: "", last_checked: "", stamps: {} };
+    const merged = { updated_at: "", last_checked: "", latest_source_date: "", stamps: {} };
     for (const chunk of payload.chunks) {
       const envelope = JSON.parse(chunk.envelope_json);
       const obj = await decryptDataEnc(envelope, password);
       if (chunk.chunk_key === "__meta__") {
         merged.updated_at = obj.updated_at || "";
         merged.last_checked = obj.last_checked || "";
+        merged.latest_source_date = obj.latest_source_date || "";
       } else if (obj && typeof obj.stamps === "object") {
         Object.assign(merged.stamps, obj.stamps);
       }
@@ -665,11 +670,16 @@ function initApp() {
       renderCategoryTabs();
       renderTable();
     } catch (err) {
+      console.error("解密／載入失敗類型:", err?.name, err?.message);
       const msg = err?.message || "";
-      if (msg.includes("HTTP") || msg.includes("圖表套件") || msg.includes("雲端資料庫")) {
+      if (err?.name === "OperationError") {
+        errBox.textContent = "密碼錯誤（與 GitHub Secrets 的 ENCRYPT_PASSWORD 不符），請檢查大小寫與空白。";
+      } else if (err?.name === "TypeError") {
+        errBox.textContent = "連線或 CORS 失敗，請按 F12 查看 Network 分頁。";
+      } else if (msg.includes("HTTP") || msg.includes("圖表套件") || msg.includes("雲端資料庫")) {
         errBox.textContent = msg;
       } else {
-        errBox.textContent = "密碼錯誤或資料無法解密，請重新確認。";
+        errBox.textContent = `資料格式異常（${err?.name || "Error"}），請打開 F12 Console 確認。`;
       }
       errBox.classList.remove("hidden");
     } finally {
