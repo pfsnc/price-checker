@@ -6,10 +6,10 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  scrape-and-encrypt:
+  scrape-and-push-cf:
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -27,19 +27,9 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run scraper & encrypt data
+      - name: Run scraper & update Cloudflare D1
         env:
           ENCRYPT_PASSWORD: ${{ secrets.ENCRYPT_PASSWORD }}
+          CF_WORKER_URL: ${{ secrets.CF_WORKER_URL }}
+          CF_INGEST_TOKEN: ${{ secrets.CF_INGEST_TOKEN }}
         run: python scraper.py
-
-      - name: Commit and push updated encrypted data
-        run: |
-          if [ -n "$(git status --porcelain docs/data.enc)" ]; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add docs/data.enc
-            git commit -m "chore: update encrypted stamp prices [skip ci]"
-            git push
-          else
-            echo "No changes to docs/data.enc."
-          fi
