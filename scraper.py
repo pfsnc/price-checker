@@ -8,7 +8,7 @@ import re
 import time
 import unicodedata
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urljoin, urlparse
@@ -27,6 +27,7 @@ logger = logging.getLogger("dual_source_stamp_scraper")
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_ENC_PATH = BASE_DIR / "docs" / "data.enc"
+TZ_UTC8 = timezone(timedelta(hours=8))
 
 # ==========================================
 # 集中管理：來源白名單、傳輸限制與格式檢查參數
@@ -54,6 +55,8 @@ HEADERS = {
     ),
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
 }
 
 REQUEST_TIMEOUT = 15
@@ -132,6 +135,11 @@ class FetchResult:
     html: Optional[str]
     status: str  # "ok" | "network_error" | "security_error" | "format_error"
     reason: str = ""
+
+
+def _now_utc8_naive() -> datetime:
+    """統一採用 UTC+8（台北／北京時間），避免 GitHub Actions UTC 主機造成日期偏差。"""
+    return datetime.now(TZ_UTC8).replace(tzinfo=None)
 
 
 # ==========================================
@@ -346,6 +354,7 @@ def split_store_into_chunks(
         "__meta__": {
             "updated_at": store.get("updated_at", ""),
             "last_checked": store.get("last_checked", ""),
+            "latest_source_date": store.get("latest_source_date", ""),
         }
     }
     by_cat: Dict[str, Dict[str, Any]] = {}
@@ -390,9 +399,14 @@ def load_existing_store_from_cf(cf_url: str, password: str) -> Dict[str, Any]:
         chunks = payload["chunks"]
         if not chunks:
             logger.info("Cloudflare D1 尚無資料，將初始化全新資料集。")
-            return {"updated_at": "", "last_checked": "", "stamps": {}}
+            return {"updated_at": "", "last_checked": "", "latest_source_date": "", "stamps": {}}
 
-        store: Dict[str, Any] = {"updated_at": "", "last_checked": "", "stamps": {}}
+        store: Dict[str, Any] = {
+            "updated_at": "",
+            "last_checked": "",
+            "latest_source_date": "",
+            "stamps": {},
+        }
         try:
             for item in chunks:
                 key = str(item.get("chunk_key") or "")
@@ -400,6 +414,7 @@ def load_existing_store_from_cf(cf_url: str, password: str) -> Dict[str, Any]:
                 if key == "__meta__":
                     store["updated_at"] = obj.get("updated_at", "")
                     store["last_checked"] = obj.get("last_checked", "")
+                    store["latest_source_date"] = obj.get("latest_source_date", "")
                 elif isinstance(obj.get("stamps"), dict):
                     store["stamps"].update(obj["stamps"])
         except Exception as exc:
@@ -653,6 +668,7 @@ def _migrate_existing_store(store: Dict[str, Any]) -> None:
         if not converted_hist:
             continue
 
+        latest_src = str(entry.get("latest_source_date") or converted_hist[-1]["date"])
         if canon_id in migrated:
             by_date = {p["date"]: p for p in migrated[canon_id]["history"]}
             for p in converted_hist:
@@ -663,6 +679,8 @@ def _migrate_existing_store(store: Dict[str, Any]) -> None:
                 else:
                     by_date[p["date"]] = p
             migrated[canon_id]["history"] = sorted(by_date.values(), key=lambda x: x["date"])
+            if latest_src > str(migrated[canon_id].get("latest_source_date") or ""):
+                migrated[canon_id]["latest_source_date"] = latest_src
         else:
             migrated[canon_id] = {
                 "id": canon_id,
@@ -670,6 +688,7 @@ def _migrate_existing_store(store: Dict[str, Any]) -> None:
                 "name": name,
                 "category": cat,
                 "last_checked": entry.get("last_checked", ""),
+                "latest_source_date": latest_src,
                 "history": converted_hist,
             }
 
@@ -681,7 +700,7 @@ def _migrate_existing_store(store: Dict[str, Any]) -> None:
 # ==========================================
 
 def _is_valid_calendar_date(y: int, m: int, d: int, today: Optional[datetime] = None) -> Optional[str]:
-    now_dt = today or datetime.now()
+    now_dt = today or _now_utc8_naive()
     try:
         dt = datetime(y, m, d)
     except ValueError:
@@ -725,7 +744,7 @@ def _extract_publish_date(soup: BeautifulSoup, title_text: str, today: Optional[
         if valid:
             return valid
 
-    return (today or datetime.now()).strftime("%Y-%m-%d")
+    return (today or _now_utc8_naive()).strftime("%Y-%m-%d")
 
 
 def _parse_price(raw_text: str) -> Optional[float]:
@@ -1105,7 +1124,7 @@ def run_sanity_checks(
             f"抓取總筆數異常過大 ({len(all_records)} > {MAX_RECORDS_PER_RUN})，疑似頁面結構錯亂"
         )
 
-    now_dt = today or datetime.now()
+    now_dt = today or _now_utc8_naive()
     max_allowed_date = (now_dt + timedelta(days=MAX_FUTURE_DAYS)).strftime("%Y-%m-%d")
 
     for rec in all_records:
@@ -1174,6 +1193,7 @@ def apply_dual_source_smart_diff(
     appended = 0
     for cid, date_map in grouped.items():
         meta = meta_by_id[cid]
+        latest_dt_in_run = max(date_map.keys())
         entry = stamps_map.get(cid)
         if entry is None:
             entry = {
@@ -1182,6 +1202,7 @@ def apply_dual_source_smart_diff(
                 "name": meta["name"],
                 "category": meta["category"],
                 "last_checked": checked_at,
+                "latest_source_date": latest_dt_in_run,
                 "history": [],
             }
             stamps_map[cid] = entry
@@ -1189,6 +1210,8 @@ def apply_dual_source_smart_diff(
             if len(meta["name"]) > len(entry.get("name", "")):
                 entry["name"] = meta["name"]
             entry["last_checked"] = checked_at
+            if latest_dt_in_run > str(entry.get("latest_source_date") or ""):
+                entry["latest_source_date"] = latest_dt_in_run
 
         history: List[Dict[str, Any]] = entry["history"]
         for dt in sorted(date_map.keys()):
@@ -1221,6 +1244,10 @@ def apply_dual_source_smart_diff(
                     appended += 1
 
     store["last_checked"] = checked_at
+    max_run_source_date = max((r["date"] for r in all_records), default="")
+    if max_run_source_date > str(store.get("latest_source_date") or ""):
+        store["latest_source_date"] = max_run_source_date
+
     if appended > 0 or not store.get("updated_at"):
         store["updated_at"] = checked_at
 
@@ -1273,7 +1300,7 @@ def main() -> None:
         raise RuntimeError("環境變數 ENCRYPT_PASSWORD 或 CF_INGEST_TOKEN 未設定。")
 
     store = load_existing_store_from_cf(cf_url, password)
-    checked_dt = datetime.now()
+    checked_dt = _now_utc8_naive()
     checked_at = checked_dt.strftime("%Y-%m-%d %H:%M:%S")
 
     with requests.Session() as session:
@@ -1305,8 +1332,9 @@ def main() -> None:
 
     chunks_written = save_store_to_cf(cf_url, ingest_token, store, password)
     logger.info(
-        "處理完成！檢查 %d 款郵票，新增/更新 %d 筆價格變動，已寫入 %d 個 D1 分塊（last_checked=%s）。",
+        "處理完成！檢查 %d 款郵票，網站最新報價日=%s，新增/更新 %d 筆價格變動，已寫入 %d 個 D1 分塊（last_checked=%s）。",
         merged_count,
+        store.get("latest_source_date", "-"),
         appended,
         chunks_written,
         store["last_checked"],
