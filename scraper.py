@@ -5,7 +5,6 @@ import math
 import os
 import random
 import re
-import tempfile
 import time
 import unicodedata
 from dataclasses import dataclass
@@ -30,7 +29,7 @@ BASE_DIR = Path(__file__).resolve().parent
 DATA_ENC_PATH = BASE_DIR / "docs" / "data.enc"
 
 # ==========================================
-# 集中管理：來源白名單、傳輸限制與基本格式參數
+# 集中管理：來源白名單、傳輸限制與格式檢查參數
 # ==========================================
 
 # 主機白名單僅能防範 SSRF 與惡意轉址，無法防範網域過期搶註或 HTTP 明文遭中間人竄改。
@@ -58,16 +57,18 @@ HEADERS = {
 }
 
 REQUEST_TIMEOUT = 15
+CF_REQUEST_TIMEOUT = 30
 MAX_REDIRECTS = 5
 MAX_RESPONSE_BYTES = 5 * 1024 * 1024  # 單頁回應上限 5 MB
 ALLOWED_CONTENT_TYPES = ("text/html", "application/xhtml+xml")
 
 MIN_VALID_DATE = "2020-01-01"
 MAX_FUTURE_DAYS = 1
-MAX_PRICE_YUAN = 50_000_000.0  # 單筆報價合理上限（5000 萬元）
+MAX_PRICE_YUAN = 50_000_000.0
 MAX_RECORDS_PER_PAGE = 1_000
 MAX_RECORDS_PER_RUN = 5_000
 HISTORY_RETENTION_DAYS = 365
+MAX_CHUNK_PLAIN_BYTES = 800_000  # 控制每塊密文遠低於 D1 單列 2 MB 上限
 
 PBKDF2_ITERATIONS = 100_000
 PRICE_FIELDS = (
@@ -123,7 +124,7 @@ class UnsafeUrlError(ValueError):
 
 
 class FormatCompatibilityError(RuntimeError):
-    """確認來源網頁格式異常或已無法預期解析（例如網域被替換、非預期網站內容或結構失效）。"""
+    """確認來源網頁格式異常或已無法預期解析。"""
 
 
 @dataclass
@@ -158,6 +159,20 @@ def validate_url(url: str) -> str:
     return cleaned
 
 
+def validate_cf_url(url: str) -> str:
+    if not url or not isinstance(url, str):
+        raise UnsafeUrlError("CF_WORKER_URL 未設定")
+    cleaned = url.strip()
+    parsed = urlparse(cleaned)
+    if (parsed.scheme or "").lower() != "https":
+        raise UnsafeUrlError("CF_WORKER_URL 必須使用 https")
+    if not parsed.hostname or parsed.username is not None or parsed.password is not None:
+        raise UnsafeUrlError("CF_WORKER_URL 格式不合法")
+    if parsed.port not in (None, 443):
+        raise UnsafeUrlError("CF_WORKER_URL 禁止使用非標準連接埠")
+    return cleaned
+
+
 def _decode_html_bytes(raw_bytes: bytes, content_type: str) -> str:
     charset = None
     m_ct = re.search(r"charset=([a-zA-Z0-9_\-]+)", content_type, re.IGNORECASE)
@@ -184,17 +199,10 @@ def _decode_html_bytes(raw_bytes: bytes, content_type: str) -> str:
 
 
 def _polite_sleep() -> None:
-    """強制請求間隔 2 至 3 秒，防止對目標伺服器造成負擔。"""
     time.sleep(random.uniform(2.0, 3.0))
 
 
 def _fetch_html(session: requests.Session, url: str, referer: str = "") -> FetchResult:
-    """
-    安全執行 HTTP GET，明確區分「暫時網路錯誤」、「不安全 URL／轉址」與「網站格式異常」：
-    - 手動檢查每一次 redirect，拒絕轉址至非白名單網域或降級協定。
-    - 驗證 HTTP 200、Content-Type、回應大小上限（串流截斷）與基本 HTML 結構。
-    - 嚴禁無限重試迴圈，也不將完整回應內容或 secrets 寫入 log。
-    """
     try:
         current_url = validate_url(url)
     except UnsafeUrlError as exc:
@@ -225,7 +233,6 @@ def _fetch_html(session: requests.Session, url: str, referer: str = "") -> Fetch
             if resp.status_code in (301, 302, 303, 307, 308):
                 loc = (resp.headers.get("Location") or "").strip()
                 if not loc:
-                    logger.warning("[格式異常] 轉址缺少 Location 標頭 [%s]", current_url)
                     return FetchResult(None, "format_error", "redirect_missing_location")
                 next_url = urljoin(current_url, loc)
                 try:
@@ -252,10 +259,9 @@ def _fetch_html(session: requests.Session, url: str, referer: str = "") -> Fetch
             if clen is not None:
                 try:
                     if int(clen) < 0 or int(clen) > MAX_RESPONSE_BYTES:
-                        logger.error("[格式異常] 回應 Content-Length 超出上限 [%s]: %s", current_url, clen)
+                        logger.error("[格式異常] 回應 Content-Length 超出上限 [%s]", current_url)
                         return FetchResult(None, "format_error", "content_length_exceeded")
                 except ValueError:
-                    logger.error("[格式異常] Content-Length 格式不合法 [%s]", current_url)
                     return FetchResult(None, "format_error", "invalid_content_length")
 
             chunks: List[bytes] = []
@@ -265,7 +271,7 @@ def _fetch_html(session: requests.Session, url: str, referer: str = "") -> Fetch
                     continue
                 total_bytes += len(chunk)
                 if total_bytes > MAX_RESPONSE_BYTES:
-                    logger.error("[格式異常] 串流回應超過 %d bytes 上限，已中止 [%s]", MAX_RESPONSE_BYTES, current_url)
+                    logger.error("[格式異常] 串流回應超過 %d bytes 上限 [%s]", MAX_RESPONSE_BYTES, current_url)
                     return FetchResult(None, "format_error", "response_too_large")
                 chunks.append(chunk)
 
@@ -283,12 +289,11 @@ def _fetch_html(session: requests.Session, url: str, referer: str = "") -> Fetch
         finally:
             resp.close()
 
-    logger.warning("[轉址異常] 轉址次數超過上限 (%d) [%s]", MAX_REDIRECTS, url)
     return FetchResult(None, "format_error", "too_many_redirects")
 
 
 # ==========================================
-# 加密 / 解密模組與原子寫入
+# 加密 / 解密與 Cloudflare D1 分塊讀寫
 # ==========================================
 
 def _derive_aes_key(password: str, salt: bytes, iterations: int) -> bytes:
@@ -332,24 +337,112 @@ def decrypt_json_payload(raw_text: str, password: str) -> Dict[str, Any]:
     return json.loads(plaintext.decode("utf-8"))
 
 
-def atomic_write_text(target_path: Path, content: str) -> None:
-    """以同目錄暫存檔 + fsync + os.replace 原子替換目標檔案，防止寫入中斷毀損。"""
-    target_path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp_name = tempfile.mkstemp(
-        prefix=f".{target_path.name}.",
-        suffix=".tmp",
-        dir=str(target_path.parent),
-    )
-    tmp_path = Path(tmp_name)
+def split_store_into_chunks(
+    store: Dict[str, Any],
+    max_plain_bytes: int = MAX_CHUNK_PLAIN_BYTES,
+) -> Dict[str, Dict[str, Any]]:
+    """依分類將資料分塊，確保每列密文尺寸遠低於 Cloudflare D1 的 2 MB 單列上限。"""
+    chunks: Dict[str, Dict[str, Any]] = {
+        "__meta__": {
+            "updated_at": store.get("updated_at", ""),
+            "last_checked": store.get("last_checked", ""),
+        }
+    }
+    by_cat: Dict[str, Dict[str, Any]] = {}
+    for cid, entry in store.get("stamps", {}).items():
+        cat = entry.get("category") or "其他"
+        by_cat.setdefault(cat, {})[cid] = entry
+
+    for cat, stamps_dict in by_cat.items():
+        raw = json.dumps({"stamps": stamps_dict}, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        if len(raw) <= max_plain_bytes:
+            chunks[cat] = {"stamps": stamps_dict}
+            continue
+
+        part_idx = 0
+        cur_dict: Dict[str, Any] = {}
+        cur_size = 16
+        for cid, entry in stamps_dict.items():
+            entry_bytes = len(json.dumps({cid: entry}, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+            if cur_dict and cur_size + entry_bytes > max_plain_bytes:
+                chunks[f"{cat}#{part_idx}"] = {"stamps": cur_dict}
+                part_idx += 1
+                cur_dict = {}
+                cur_size = 16
+            cur_dict[cid] = entry
+            cur_size += entry_bytes
+        if cur_dict:
+            chunks[f"{cat}#{part_idx}"] = {"stamps": cur_dict}
+
+    return chunks
+
+
+def load_existing_store_from_cf(cf_url: str, password: str) -> Dict[str, Any]:
+    """從 Cloudflare Worker 讀取並解密現有資料；若遠端連線失敗採 fail-closed 避免覆蓋舊史。"""
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            handle.write(content)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(str(tmp_path), str(target_path))
-    except Exception:
-        tmp_path.unlink(missing_ok=True)
-        raise
+        resp = requests.get(cf_url, timeout=CF_REQUEST_TIMEOUT, allow_redirects=False)
+        resp.raise_for_status()
+        payload = resp.json()
+    except Exception as exc:
+        raise RuntimeError(f"無法從 Cloudflare 讀取現有資料庫（已中止避免覆寫）: {type(exc).__name__}") from exc
+
+    if isinstance(payload, dict) and isinstance(payload.get("chunks"), list):
+        chunks = payload["chunks"]
+        if not chunks:
+            logger.info("Cloudflare D1 尚無資料，將初始化全新資料集。")
+            return {"updated_at": "", "last_checked": "", "stamps": {}}
+
+        store: Dict[str, Any] = {"updated_at": "", "last_checked": "", "stamps": {}}
+        try:
+            for item in chunks:
+                key = str(item.get("chunk_key") or "")
+                obj = decrypt_json_payload(item["envelope_json"], password)
+                if key == "__meta__":
+                    store["updated_at"] = obj.get("updated_at", "")
+                    store["last_checked"] = obj.get("last_checked", "")
+                elif isinstance(obj.get("stamps"), dict):
+                    store["stamps"].update(obj["stamps"])
+        except Exception as exc:
+            raise RuntimeError(
+                f"無法解密 Cloudflare D1 中的資料（請確認 ENCRYPT_PASSWORD 是否一致）: {type(exc).__name__}"
+            ) from exc
+
+        _migrate_existing_store(store)
+        return store
+
+    raise RuntimeError("Cloudflare Worker 回傳格式非預期（缺少 chunks 陣列）。")
+
+
+def save_store_to_cf(cf_url: str, ingest_token: str, store: Dict[str, Any], password: str) -> int:
+    """分塊 AES-256-GCM 加密後透過原子 batch API 寫入 Cloudflare D1。"""
+    plain_chunks = split_store_into_chunks(store)
+    updated_at = str(store.get("last_checked") or "")
+    out_chunks = [
+        {
+            "chunk_key": key,
+            "envelope_json": encrypt_json_payload(obj, password),
+            "updated_at": updated_at,
+        }
+        for key, obj in plain_chunks.items()
+    ]
+
+    resp = requests.post(
+        cf_url,
+        json={"chunks": out_chunks},
+        headers={
+            "Authorization": f"Bearer {ingest_token}",
+            "Content-Type": "application/json",
+        },
+        timeout=CF_REQUEST_TIMEOUT,
+        allow_redirects=False,
+    )
+    if resp.status_code != 200:
+        raise RuntimeError(f"寫入 Cloudflare D1 失敗（HTTP {resp.status_code}）")
+
+    data = resp.json()
+    if not data.get("ok"):
+        raise RuntimeError("Cloudflare D1 回應寫入未成功")
+    return len(out_chunks)
 
 
 # ==========================================
@@ -583,24 +676,6 @@ def _migrate_existing_store(store: Dict[str, Any]) -> None:
     store["stamps"] = migrated
 
 
-def load_existing_store(password: str) -> Dict[str, Any]:
-    if not DATA_ENC_PATH.exists():
-        logger.info("找不到現有 %s，將建立全新資料集。", DATA_ENC_PATH)
-        return {"updated_at": "", "last_checked": "", "stamps": {}}
-
-    raw = DATA_ENC_PATH.read_text(encoding="utf-8")
-    try:
-        store = decrypt_json_payload(raw, password)
-        if not isinstance(store, dict) or "stamps" not in store:
-            raise ValueError("資料格式不符")
-        _migrate_existing_store(store)
-        return store
-    except Exception as exc:
-        raise RuntimeError(
-            f"無法解密現有 {DATA_ENC_PATH}（請確認 ENCRYPT_PASSWORD 是否正確）: {type(exc).__name__}"
-        ) from exc
-
-
 # ==========================================
 # 日期、價格與 HTML 表格解析
 # ==========================================
@@ -810,7 +885,7 @@ def _parse_table(
 
 
 # ==========================================
-# 資料源 A 與 B 爬蟲（附網站格式相容性檢查）
+# 資料源 A 與 B 爬蟲
 # ==========================================
 
 def _extract_cngold_title(soup: BeautifulSoup, fallback: str) -> str:
@@ -1025,10 +1100,6 @@ def run_sanity_checks(
     all_records: List[Dict[str, Any]],
     today: Optional[datetime] = None,
 ) -> None:
-    """
-    僅驗證基本型別、有效日期、有限非負價格與總筆數上限；
-    不因品種數量變化、覆蓋率、欄位保留率或正常市場價格波動而阻擋更新。
-    """
     if len(all_records) > MAX_RECORDS_PER_RUN:
         raise FormatCompatibilityError(
             f"抓取總筆數異常過大 ({len(all_records)} > {MAX_RECORDS_PER_RUN})，疑似頁面結構錯亂"
@@ -1161,10 +1232,6 @@ def prune_old_history(
     reference_dt: datetime,
     retention_days: int = HISTORY_RETENTION_DAYS,
 ) -> int:
-    """
-    只保留最近 retention_days（預設 365 天）的 history 資料（以目前檢查時間為 cutoff 基準）。
-    若某郵票清理後完全沒有剩餘 history，保留最新一筆紀錄，避免有無報價項目。
-    """
     cutoff_date = reference_dt.date() - timedelta(days=retention_days)
     stamps_map = store.get("stamps", {})
     pruned_count = 0
@@ -1200,10 +1267,12 @@ def prune_old_history(
 
 def main() -> None:
     password = os.environ.get("ENCRYPT_PASSWORD", "").strip()
-    if not password:
-        raise RuntimeError("環境變數 ENCRYPT_PASSWORD 未設定，無法進行加密輸出。")
+    cf_url = validate_cf_url(os.environ.get("CF_WORKER_URL", ""))
+    ingest_token = os.environ.get("CF_INGEST_TOKEN", "").strip()
+    if not password or not ingest_token:
+        raise RuntimeError("環境變數 ENCRYPT_PASSWORD 或 CF_INGEST_TOKEN 未設定。")
 
-    store = load_existing_store(password)
+    store = load_existing_store_from_cf(cf_url, password)
     checked_dt = datetime.now()
     checked_at = checked_dt.strftime("%Y-%m-%d %H:%M:%S")
 
@@ -1222,10 +1291,10 @@ def main() -> None:
     if format_errors:
         for msg in format_errors:
             logger.error("格式不相容錯誤: %s", msg)
-        raise FormatCompatibilityError("偵測到來源網站格式錯誤或已無法預期解析，已中止並保留舊資料檔。")
+        raise FormatCompatibilityError("偵測到來源網站格式錯誤或已無法預期解析，已中止並保留 Cloudflare D1 舊資料。")
 
     if not all_records:
-        logger.warning("本次因暫時性網路錯誤未取得任何有效報價，保留既有 docs/data.enc 不覆寫。")
+        logger.warning("本次因暫時性網路錯誤未取得任何有效報價，保留 Cloudflare D1 舊資料不覆寫。")
         return
 
     run_sanity_checks(all_records, today=checked_dt)
@@ -1234,15 +1303,13 @@ def main() -> None:
     pruned_count = prune_old_history(store, checked_dt, retention_days=HISTORY_RETENTION_DAYS)
     logger.info("歷史紀錄清理完成（保留最近 %d 天）：已清除 %d 筆舊紀錄。", HISTORY_RETENTION_DAYS, pruned_count)
 
-    encrypted_output = encrypt_json_payload(store, password)
-    atomic_write_text(DATA_ENC_PATH, encrypted_output)
-
+    chunks_written = save_store_to_cf(cf_url, ingest_token, store, password)
     logger.info(
-        "處理完成！檢查 %d 款郵票，新增/更新 %d 筆價格變動，last_checked=%s，updated_at=%s",
+        "處理完成！檢查 %d 款郵票，新增/更新 %d 筆價格變動，已寫入 %d 個 D1 分塊（last_checked=%s）。",
         merged_count,
         appended,
+        chunks_written,
         store["last_checked"],
-        store["updated_at"],
     )
 
 
