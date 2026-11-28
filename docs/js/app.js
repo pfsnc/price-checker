@@ -599,6 +599,36 @@ function renderTable() {
   tbody.querySelectorAll(".sparkline-canvas").forEach((canvas) => sparkObserver.observe(canvas));
 }
 
+function getDataSourceUrl() {
+  const configured = (document.body?.dataset?.apiUrl || "").trim();
+  if (configured && !configured.includes("你的")) {
+    return configured;
+  }
+  return "./data.enc";
+}
+
+async function decryptResponsePayload(payload, password) {
+  // 支援 Cloudflare D1 分塊格式 { v: 3, chunks: [...] }，同時向下相容舊版單檔 data.enc
+  if (payload && Array.isArray(payload.chunks)) {
+    if (!payload.chunks.length) {
+      throw new Error("雲端資料庫目前為空，請先執行爬蟲或遷移工作流程。");
+    }
+    const merged = { updated_at: "", last_checked: "", stamps: {} };
+    for (const chunk of payload.chunks) {
+      const envelope = JSON.parse(chunk.envelope_json);
+      const obj = await decryptDataEnc(envelope, password);
+      if (chunk.chunk_key === "__meta__") {
+        merged.updated_at = obj.updated_at || "";
+        merged.last_checked = obj.last_checked || "";
+      } else if (obj && typeof obj.stamps === "object") {
+        Object.assign(merged.stamps, obj.stamps);
+      }
+    }
+    return merged;
+  }
+  return decryptDataEnc(payload, password);
+}
+
 function initApp() {
   const unlockForm = document.getElementById("unlockForm");
   const searchInput = document.getElementById("searchInput");
@@ -607,10 +637,14 @@ function initApp() {
 
   unlockForm.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const pwInput = document.getElementById("passwordInput");
-    const errBox = document.getElementById("authError");
-    const btn = document.getElementById("unlockBtn");
-    const password = pwInput.value;
+    const sourceUrl = getDataSourceUrl();
+    const sep = sourceUrl.includes("?") ? "&" : "?";
+    const res = await fetch(`${sourceUrl}${sep}t=${Date.now()}`, { cache: "no-store" });
+    if (!res.ok) throw new Error(`無法載入加密資料 (HTTP ${res.status})`);
+    const payload = await res.json();
+
+    storeData = await decryptResponsePayload(payload, password);
+    stampList = Object.values(storeData.stamps || {}).sort(compareStamps);
 
     errBox.classList.add("hidden");
     btn.disabled = true;
