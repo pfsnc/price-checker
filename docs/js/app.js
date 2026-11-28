@@ -288,7 +288,6 @@ function renderExpandedContent(idx, item, days) {
   const itemHasCto = fullHist.some((h) => hasPositivePrice(h.site_a_cto) || hasPositivePrice(h.site_b_cto));
   const itemHasUsed = fullHist.some((h) => hasPositivePrice(h.site_a_used) || hasPositivePrice(h.site_b_used));
 
-  // 明細表與圖表同步套用相同日期範圍
   const tbodyEl = document.getElementById(`detail-tbody-${idx}`);
   if (tbodyEl) {
     if (!reversed.length) {
@@ -482,7 +481,6 @@ function toggleDetailRow(idx, colSpan) {
     });
   });
 
-  // 詳情圖表與明細表預設同步顯示最近 30 天
   renderExpandedContent(idx, item, CHART_RANGE_DAYS);
 }
 
@@ -637,14 +635,10 @@ function initApp() {
 
   unlockForm.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const sourceUrl = getDataSourceUrl();
-    const sep = sourceUrl.includes("?") ? "&" : "?";
-    const res = await fetch(`${sourceUrl}${sep}t=${Date.now()}`, { cache: "no-store" });
-    if (!res.ok) throw new Error(`無法載入加密資料 (HTTP ${res.status})`);
-    const payload = await res.json();
-
-    storeData = await decryptResponsePayload(payload, password);
-    stampList = Object.values(storeData.stamps || {}).sort(compareStamps);
+    const pwInput = document.getElementById("passwordInput");
+    const errBox = document.getElementById("authError");
+    const btn = document.getElementById("unlockBtn");
+    const password = pwInput.value;
 
     errBox.classList.add("hidden");
     btn.disabled = true;
@@ -654,11 +648,14 @@ function initApp() {
       if (typeof window.Chart !== "function") {
         throw new Error("本機圖表套件尚未載入，請確認建置資產是否完整。");
       }
-      const res = await fetch(`./data.enc?t=${Date.now()}`, { cache: "no-store" });
-      if (!res.ok) throw new Error(`無法載入加密資料檔 (HTTP ${res.status})`);
-      const envelope = await res.json();
 
-      storeData = await decryptDataEnc(envelope, password);
+      const sourceUrl = getDataSourceUrl();
+      const sep = sourceUrl.includes("?") ? "&" : "?";
+      const res = await fetch(`${sourceUrl}${sep}t=${Date.now()}`, { cache: "no-store" });
+      if (!res.ok) throw new Error(`無法載入加密資料 (HTTP ${res.status})`);
+      const payload = await res.json();
+
+      storeData = await decryptResponsePayload(payload, password);
       stampList = Object.values(storeData.stamps || {}).sort(compareStamps);
 
       pwInput.value = "";
@@ -669,7 +666,7 @@ function initApp() {
       renderTable();
     } catch (err) {
       const msg = err?.message || "";
-      if (msg.includes("HTTP") || msg.includes("圖表套件")) {
+      if (msg.includes("HTTP") || msg.includes("圖表套件") || msg.includes("雲端資料庫")) {
         errBox.textContent = msg;
       } else {
         errBox.textContent = "密碼錯誤或資料無法解密，請重新確認。";
